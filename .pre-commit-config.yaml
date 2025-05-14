@@ -1,0 +1,14 @@
+repos:
+-   repo: local
+    hooks:
+    -   id: go-fmt
+        name: go fmt
+        entry: go fmt
+        language: system
+        types: [go]
+    -   id: go-test
+        name: go test
+        entry: go test ./pkg/ansiblejinja
+        language: system
+        types: [go]
+        pass_filenames: false 
