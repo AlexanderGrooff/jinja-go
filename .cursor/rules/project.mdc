@@ -1,0 +1,24 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+This project's goal is to create a reusable library that mimic's Ansible's Jinja templating behaviour, but rewritten in Golang.
+
+The goal is to provide two functions:
+- TemplateString
+- EvaluateExpression
+
+TemplateString takes as input: a string that contains Jinja variables, and a context mapping. This context mapping should be map[string]any. All variables encapsulated like {{ this }} should be evaluated and put in the resulting string.
+
+EvaluateExpression takes the same input as TemplateString, but should be treated as a Jinja variable. If it cannot be evaluated through the given context mapping, an error should be raised.
+
+Next to this, all builtin functions/filters that are usable in Ansible's Jinja should be covered in this library. This includes items such as:
+- lookup
+- urlencode
+- map
+- {{ item | default(true) }}
+
+etc.
+
+Also, basic flow-control that Jinja supports should also be supported here. Think of {% for item in items %}, {% if %}, etc.
