@@ -139,8 +139,57 @@ func TestTemplateString(t *testing.T) {
 		{
 			name:     "string expression with escaped double quotes inside expression",
 			template: "{{ \"{{ name }}\" }}",
+			context:  map[string]interface{}{}, // name not needed as outer is literal
+			want:     "{{ name }}",             // The literal string is rendered
+		},
+		// Default Filter Tests for TemplateString
+		{
+			name:     "template with default filter for undefined variable",
+			template: "Hello {{ undefined_var | default('World') }}!",
+			context:  map[string]interface{}{},
+			want:     "Hello World!",
+		},
+		{
+			name:     "template with default filter for defined variable",
+			template: "Hello {{ name | default('Fallback') }}!",
 			context:  map[string]interface{}{"name": "Jinja"},
-			want:     "{{ name }}",
+			want:     "Hello Jinja!",
+		},
+		{
+			name:     "template with default filter for empty string variable",
+			template: "Value: {{ empty_val | default('DefaultValue') }}",
+			context:  map[string]interface{}{"empty_val": ""},
+			want:     "Value: DefaultValue",
+		},
+		{
+			name:     "template with default filter for zero value variable",
+			template: "Count: {{ num | default(100) }}",
+			context:  map[string]interface{}{"num": 0},
+			want:     "Count: 0",
+		},
+		{
+			name:     "template with default filter for false variable",
+			template: "Enabled: {{ flag | default(true) }}",
+			context:  map[string]interface{}{"flag": false},
+			want:     "Enabled: true",
+		},
+		{
+			name:     "template with default filter with variable as default",
+			template: "{{ undef | default(other_var) }}",
+			context:  map[string]interface{}{"other_var": "DefaultFromVar"},
+			want:     "DefaultFromVar",
+		},
+		{
+			name:     "template with default filter with literal string default containing spaces",
+			template: "{{ undef | default('Hello World') }}",
+			context:  map[string]interface{}{},
+			want:     "Hello World",
+		},
+		{
+			name:     "template with default filter for nil value in context",
+			template: "Value: {{ nil_val | default('IsNil') }}",
+			context:  map[string]interface{}{"nil_val": nil},
+			want:     "Value: IsNil",
 		},
 	}
 
@@ -226,6 +275,71 @@ func TestEvaluateExpression(t *testing.T) {
 			name:       "expression with only spaces, key does not exist",
 			expression: "   ",
 			context:    map[string]interface{}{"realKey": "value"}, // Trimmed key is ""
+			want:       nil,
+			wantErr:    true,
+		},
+		// Default Filter Tests for EvaluateExpression
+		{
+			name:       "evaluate default filter for undefined variable",
+			expression: "undefined_var | default('World')",
+			context:    map[string]interface{}{},
+			want:       "World",
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter for defined variable",
+			expression: "name | default('Fallback')",
+			context:    map[string]interface{}{"name": "Jinja"},
+			want:       "Jinja",
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter for empty string variable",
+			expression: "empty_val | default('DefaultValue')",
+			context:    map[string]interface{}{"empty_val": ""},
+			want:       "DefaultValue",
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter for zero value variable",
+			expression: "num | default(100)",
+			context:    map[string]interface{}{"num": 0},
+			want:       0,
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter for false variable",
+			expression: "flag | default(true)",
+			context:    map[string]interface{}{"flag": false},
+			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter with variable as default",
+			expression: "undef | default(other_var)",
+			context:    map[string]interface{}{"other_var": "DefaultFromVar"},
+			want:       "DefaultFromVar",
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter with literal string default containing spaces",
+			expression: "undef | default('Hello World')",
+			context:    map[string]interface{}{},
+			want:       "Hello World",
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter for nil value in context",
+			expression: "nil_val | default('IsNil')",
+			context:    map[string]interface{}{"nil_val": nil},
+			want:       "IsNil",
+			wantErr:    false,
+		},
+		// EvaluateExpression specific error case for undefined without default
+		{
+			name:       "evaluate strictly undefined variable (error case for EvaluateExpression)",
+			expression: "strictly_undefined_var",
+			context:    map[string]interface{}{},
 			want:       nil,
 			wantErr:    true,
 		},
