@@ -620,3 +620,86 @@ func (p *Parser) parseExpressionTag() *Node {
 		Content: content,
 	}
 }
+
+// ParseNext returns the next node (text or expression) from the input stream.
+// It returns (nil, nil) when EOF is reached.
+// It relies on p.parseExpressionTag to handle the intricacies of expression parsing,
+// including resetting p.pos if an expression tag is not properly closed.
+func (p *Parser) ParseNext() (*Node, error) {
+	if p.pos >= len(p.input) {
+		return nil, nil // EOF, no error
+	}
+
+	// Check if current position starts with an expression marker "{{"
+	if strings.HasPrefix(p.input[p.pos:], "{{") {
+		// Attempt to parse it as a full expression tag
+		// parseExpressionTag will advance p.pos on success, or reset p.pos on failure
+		exprNode := p.parseExpressionTag()
+		if exprNode != nil {
+			// Successfully parsed an expression node
+			return exprNode, nil
+		}
+		// If exprNode is nil, parseExpressionTag failed (e.g. "}}" not found).
+		// p.pos was reset by parseExpressionTag.
+		// In this case, the "{{" is treated as literal text.
+		// We fall through to the text parsing logic below.
+	}
+
+	// Text parsing logic:
+	// Find the next occurrence of "{{" or end of string.
+	// This search starts from the current p.pos.
+	nextMarkerIndexInSubstring := strings.Index(p.input[p.pos:], "{{")
+
+	if nextMarkerIndexInSubstring == -1 {
+		// No more "{{" markers, the rest of the input is text.
+		content := p.input[p.pos:]
+		p.pos = len(p.input)   // Consume the rest of the input
+		if len(content) == 0 { // Should only happen if called again after already at EOF
+			return nil, nil
+		}
+		return &Node{Type: NodeText, Content: content}, nil
+	}
+
+	if nextMarkerIndexInSubstring == 0 {
+		// This means p.input[p.pos:] starts with "{{" AND parseExpressionTag (called above) failed for it.
+		// So, this specific "{{" is literal. The text node should include this "{{"
+		// and extend until the *next* "{{" that could start a new valid expression, or EOF.
+
+		// Search for the next "{{" starting *after* the first character of the current problematic "{{"
+		// to ensure progress.
+		searchTextStartOffset := p.pos + 1 // Start search after the initial '{'
+
+		// Handle edge cases where input is very short (e.g., just "{" or "{{")
+		if searchTextStartOffset > len(p.input) { // e.g., input at p.pos is just "{"
+			content := p.input[p.pos:]
+			p.pos = len(p.input)
+			return &Node{Type: NodeText, Content: content}, nil
+		}
+
+		// If p.input[p.pos:] was "{{" and parseExpressionTag failed, searchTextStartOffset is p.pos + 1.
+		// input[searchTextStartOffset:] is the second "{". Index of "{{" in "{" is -1.
+		nextNextMarkerRelIndex := strings.Index(p.input[searchTextStartOffset:], "{{")
+
+		if nextNextMarkerRelIndex == -1 {
+			// No more "{{" found after the current problematic one.
+			// The rest of the string from p.pos is literal text.
+			content := p.input[p.pos:]
+			p.pos = len(p.input)
+			return &Node{Type: NodeText, Content: content}, nil
+		}
+
+		// Another "{{" was found. The text segment goes from p.pos up to this new "{{"
+		// nextNextMarkerRelIndex is relative to searchTextStartOffset.
+		// Absolute end of the text segment is searchTextStartOffset + nextNextMarkerRelIndex.
+		endOfTextAbs := searchTextStartOffset + nextNextMarkerRelIndex
+		content := p.input[p.pos:endOfTextAbs]
+		p.pos = endOfTextAbs // p.pos is now at the start of the *next* "{{"
+		return &Node{Type: NodeText, Content: content}, nil
+
+	} else { // nextMarkerIndexInSubstring > 0
+		// Text exists before the next "{{"
+		content := p.input[p.pos : p.pos+nextMarkerIndexInSubstring]
+		p.pos += nextMarkerIndexInSubstring // Advance p.pos to the start of the next "{{"
+		return &Node{Type: NodeText, Content: content}, nil
+	}
+}
