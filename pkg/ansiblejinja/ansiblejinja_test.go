@@ -136,6 +136,12 @@ func TestTemplateString(t *testing.T) {
 			context:  map[string]interface{}{},
 			want:     "Value: ",
 		},
+		{
+			name:     "string expression with escaped double quotes inside expression",
+			template: "{{ \"{{ name }}\" }}",
+			context:  map[string]interface{}{"name": "Jinja"},
+			want:     "{{ name }}",
+		},
 	}
 
 	for _, tt := range tests {

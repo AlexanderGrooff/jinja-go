@@ -176,9 +176,29 @@ func TestParseTemplate(t *testing.T) {
 			want:     []segment{{expressionTag, " 'some string' "}},
 		},
 		{
-			name:     "string expression inside expression#01",
+			name:     "expression opening braces inside expression",
 			template: "{{ '{{' }}",
 			want:     []segment{{expressionTag, " '{{' "}},
+		},
+		{
+			name:     "expression closing braces inside expression",
+			template: "{{ '}}' }}",
+			want:     []segment{{expressionTag, " '}}' "}},
+		},
+		{
+			name:     "string expression with escaped braces inside expression",
+			template: "{{ '{{}}' }}",
+			want:     []segment{{expressionTag, " '{{}}' "}},
+		},
+		{
+			name:     "string expression with escaped double quotes inside expression",
+			template: "{{ '\"' }}",
+			want:     []segment{{expressionTag, " '\"' "}},
+		},
+		{
+			name:     "escaped nested expression",
+			template: "{{ \"{{ name }}\" }}",
+			want:     []segment{{expressionTag, " \"{{ name }}\" "}},
 		},
 	}
 
