@@ -408,3 +408,185 @@ func TestEvaluateExpression(t *testing.T) {
 		})
 	}
 }
+
+func TestTemplateString_IfStatements(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		want     string
+		wantErr  bool
+	}{
+		// Basic If/Endif
+		{
+			name:     "if true condition",
+			template: "{% if true %}Hello{% endif %}",
+			context:  map[string]interface{}{},
+			want:     "Hello",
+			wantErr:  false,
+		},
+		{
+			name:     "if false condition",
+			template: "{% if false %}Hello{% endif %}Bye",
+			context:  map[string]interface{}{},
+			want:     "Bye",
+			wantErr:  false,
+		},
+		{
+			name:     "if variable true",
+			template: "{% if show %}Welcome{% endif %} User",
+			context:  map[string]interface{}{"show": true},
+			want:     "Welcome User",
+			wantErr:  false,
+		},
+		{
+			name:     "if variable false",
+			template: "{% if show %}Welcome{% endif %} User",
+			context:  map[string]interface{}{"show": false},
+			want:     " User",
+			wantErr:  false,
+		},
+		// Truthiness Tests
+		{
+			name:     "if empty string (falsey)",
+			template: "{% if val %}Text{% endif %} End",
+			context:  map[string]interface{}{"val": ""},
+			want:     " End",
+			wantErr:  false,
+		},
+		{
+			name:     "if non-empty string (truthy)",
+			template: "{% if val %}Text{% endif %} End",
+			context:  map[string]interface{}{"val": "hello"},
+			want:     "Text End",
+			wantErr:  false,
+		},
+		{
+			name:     "if zero int (falsey)",
+			template: "{% if num %}Number{% endif %} Zero",
+			context:  map[string]interface{}{"num": 0},
+			want:     " Zero",
+			wantErr:  false,
+		},
+		{
+			name:     "if non-zero int (truthy)",
+			template: "{% if num %}Number{% endif %} NonZero",
+			context:  map[string]interface{}{"num": 1},
+			want:     "Number NonZero",
+			wantErr:  false,
+		},
+		{
+			name:     "if nil value (falsey)",
+			template: "{% if data %}Data{% endif %} End",
+			context:  map[string]interface{}{"data": nil},
+			want:     " End",
+			wantErr:  false,
+		},
+		{
+			name:     "if empty list (falsey)",
+			template: "{% if items %}List{% endif %} Done",
+			context:  map[string]interface{}{"items": []string{}},
+			want:     " Done",
+			wantErr:  false,
+		},
+		{
+			name:     "if non-empty list (truthy)",
+			template: "{% if items %}List{% endif %} Done",
+			context:  map[string]interface{}{"items": []string{"a"}},
+			want:     "List Done",
+			wantErr:  false,
+		},
+		{
+			name:     "if empty map (falsey)",
+			template: "{% if dict %}Map{% endif %} EndMap",
+			context:  map[string]interface{}{"dict": map[string]string{}},
+			want:     " EndMap",
+			wantErr:  false,
+		},
+		{
+			name:     "if non-empty map (truthy)",
+			template: "{% if dict %}Map{% endif %} EndMap",
+			context:  map[string]interface{}{"dict": map[string]string{"key": "val"}},
+			want:     "Map EndMap",
+			wantErr:  false,
+		},
+		// Nested If Statements
+		{
+			name:     "nested if true true",
+			template: "{% if outer %}Outer{% if inner %} Inner{% endif %} EndOuter{% endif %}",
+			context:  map[string]interface{}{"outer": true, "inner": true},
+			want:     "Outer Inner EndOuter",
+			wantErr:  false,
+		},
+		{
+			name:     "nested if true false",
+			template: "{% if outer %}Outer{% if inner %} Inner{% endif %} EndOuter{% endif %}",
+			context:  map[string]interface{}{"outer": true, "inner": false},
+			want:     "Outer EndOuter",
+			wantErr:  false,
+		},
+		{
+			name:     "nested if false true (outer hides inner)",
+			template: "{% if outer %}Outer{% if inner %} Inner{% endif %} EndOuter{% endif %}Rest",
+			context:  map[string]interface{}{"outer": false, "inner": true},
+			want:     "Rest",
+			wantErr:  false,
+		},
+		// Error Cases for If Statements
+		{
+			name:     "unclosed if statement",
+			template: "Hello {% if true %}Something",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
+		{
+			name:     "unexpected endif",
+			template: "Hello {% endif %}",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
+		{
+			name:     "if condition evaluates to undefined variable",
+			template: "{% if undefined_var %}Text{% endif %}",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
+		{
+			name:     "if tag missing condition",
+			template: "{% if %}Hello{% endif %}",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
+		{
+			name:     "if with expression inside then text (using pre-evaluated bool)",
+			template: "{% if is_positive %}{{ val }} is positive.{% endif %} Val is {{ val }}",
+			context:  map[string]interface{}{"val": 10, "is_positive": true},
+			want:     "10 is positive. Val is 10",
+			wantErr:  false,
+		},
+		{
+			name:     "if with expression inside (false condition, using pre-evaluated bool)",
+			template: "{% if is_negative %}{{ val }} is negative.{% endif %} Val is {{ val }}",
+			context:  map[string]interface{}{"val": 10, "is_negative": false},
+			want:     " Val is 10",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := TemplateString(tt.template, tt.context)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TemplateString() error = %v, wantErr %v for template %q", err, tt.wantErr, tt.template)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("TemplateString() got = %q, want %q for template %q", got, tt.want, tt.template)
+			}
+		})
+	}
+}

@@ -19,10 +19,32 @@ func NewParser(input string) *Parser {
 	return &Parser{input: input, pos: 0}
 }
 
+// ControlTagType defines the specific type of a control tag.
+type ControlTagType string
+
+// Enumerates the different types of control tags.
+const (
+	ControlIf      ControlTagType = "if"
+	ControlEndIf   ControlTagType = "endif"
+	ControlFor     ControlTagType = "for"    // Placeholder for future 'for' loop implementation
+	ControlEndFor  ControlTagType = "endfor" // Placeholder for future 'endfor' implementation
+	ControlElse    ControlTagType = "else"   // Placeholder for future 'else' implementation
+	ControlElseIf  ControlTagType = "elif"   // Placeholder for future 'elif' (else if) implementation
+	ControlUnknown ControlTagType = "unknown"
+)
+
+// ControlTagInfo holds detailed information about a parsed control tag.
+type ControlTagInfo struct {
+	Type       ControlTagType
+	Expression string // For 'if', 'elif', 'for': the condition or loop expression.
+	// Future fields might include loop variables for 'for' tags.
+}
+
 // Node represents a parsed element in the template, such as literal text or an expression.
 type Node struct {
-	Type    NodeType // The kind of node (e.g., text, expression).
-	Content string   // The raw content of the node.
+	Type    NodeType        // The kind of node (e.g., text, expression).
+	Content string          // The raw content of the node.
+	Control *ControlTagInfo // Populated if Type is NodeControlTag, provides details about the control tag.
 	// Future additions: original start/end positions, evaluated value for expressions, etc.
 }
 
@@ -34,6 +56,7 @@ const (
 	NodeText       NodeType = iota // Represents a segment of literal text.
 	NodeExpression                 // Represents a Jinja expression, e.g., {{ variable }}.
 	NodeComment                    // Represents a comment, e.g., {# comment #}.
+	NodeControlTag                 // Represents a control structure tag, e.g., {% if ... %}.
 	// NodeTag                 // Future: Represents a control structure tag, e.g., {% if ... %}.
 )
 
@@ -433,7 +456,164 @@ func (p *Parser) parseCommentTag() *Node {
 	}
 }
 
-// parseTag is called when "{{" is found.
+// parseControlTagDetail parses the trimmed content of a control tag (e.g., "if condition")
+// and returns structured information about it.
+func parseControlTagDetail(trimmedContent string) (*ControlTagInfo, error) {
+	parts := strings.Fields(trimmedContent) // Splits by whitespace
+	if len(parts) == 0 {
+		// This case should ideally be prevented by prior checks ensuring content is not just whitespace,
+		// or if it is, it implies an empty tag like {%%} which might be an error or specific syntax.
+		return nil, fmt.Errorf("empty control tag content")
+	}
+
+	tagTypeStr := strings.ToLower(parts[0])
+	info := &ControlTagInfo{}
+
+	switch tagTypeStr {
+	case "if":
+		info.Type = ControlIf
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("if tag requires a condition, e.g., {%% if user.isAdmin %%}")
+		}
+		// The rest of the parts form the expression.
+		info.Expression = strings.Join(parts[1:], " ")
+	case "endif":
+		info.Type = ControlEndIf
+		if len(parts) > 1 {
+			// Jinja's {% endif %} typically does not take arguments.
+			return nil, fmt.Errorf("endif tag does not take any arguments, e.g., {%% endif %%}")
+		}
+	// case "else": // Future implementation
+	// 	info.Type = ControlElse
+	// 	if len(parts) > 1 {
+	// 		return nil, fmt.Errorf("else tag does not take arguments")
+	// 	}
+	// case "elif": // Future implementation
+	// 	info.Type = ControlElseIf
+	// 	if len(parts) < 2 {
+	// 		return nil, fmt.Errorf("elif tag requires a condition")
+	// 	}
+	// 	info.Expression = strings.Join(parts[1:], " ")
+	// case "for": // Future implementation
+	//  info.Type = ControlFor
+	//  // ... parse "item in items" ...
+	// case "endfor": // Future implementation
+	//  info.Type = ControlEndFor
+	default:
+		// For now, any unrecognized control tag keyword is marked as Unknown.
+		// The raw content is stored in Expression for potential debugging or generic handling.
+		info.Type = ControlUnknown
+		info.Expression = trimmedContent // Store the original content if type is unknown
+		// Depending on strictness, an error could be returned here:
+		// return nil, fmt.Errorf("unknown control tag type: '%s'", tagTypeStr)
+	}
+	return info, nil
+}
+
+// parseControlTag is called when "{%" is found.
+// It extracts the content between "{%" and "%}".
+func (p *Parser) parseControlTag() *Node {
+	originalPos := p.pos // For potential backtrack if parsing fails
+
+	// Ensure we are actually at the start of a control tag
+	if !(p.pos+2 <= len(p.input) && p.input[p.pos:p.pos+2] == "{%") {
+		return nil // Not a control tag, or called incorrectly.
+	}
+
+	p.pos += 2                   // Consume "{%"
+	controlContentStart := p.pos // The actual content starts after "{%"
+
+	searchIndex := p.pos
+	var controlContentEnd int = -1
+
+	for searchIndex < len(p.input) {
+		// String literal skipping logic
+		if p.input[searchIndex] == '\'' || p.input[searchIndex] == '"' {
+			quoteChar := p.input[searchIndex]
+			searchIndex++ // Move past the opening quote
+			literalStringClosed := false
+			stringContentScanStart := searchIndex
+			for searchIndex < len(p.input) {
+				if p.input[searchIndex] == quoteChar {
+					isEscaped := false
+					if searchIndex > stringContentScanStart {
+						backslashCount := 0
+						tempIdx := searchIndex - 1
+						for tempIdx >= stringContentScanStart && p.input[tempIdx] == '\\' {
+							backslashCount++
+							tempIdx--
+						}
+						if backslashCount%2 == 1 {
+							isEscaped = true
+						}
+					}
+					if !isEscaped {
+						searchIndex++ // Move past the closing quote
+						literalStringClosed = true
+						break
+					}
+				}
+				searchIndex++
+			}
+			if !literalStringClosed {
+				p.pos = originalPos // Backtrack
+				// This indicates a syntax error within the control tag itself.
+				// For simplicity, we might return a node that evaluation logic can flag as an error.
+				// Or, the parser itself could signal an error node type or return an error.
+				// For now, returning nil causes it to be treated as text.
+				// A more robust parser might create an "ErrorNode" or allow ParseNext to return an error.
+				return nil // Unclosed string literal within the control tag.
+			}
+			continue // Continue main scan for '%}'
+		}
+
+		if searchIndex+1 < len(p.input) && p.input[searchIndex] == '%' && p.input[searchIndex+1] == '}' {
+			controlContentEnd = searchIndex // Marks start of "%}"
+			break                           // Found matching "%}"
+		}
+		searchIndex++
+	}
+
+	if controlContentEnd == -1 {
+		p.pos = originalPos // Backtrack
+		return nil          // Indicate failure (unclosed control tag).
+	}
+
+	rawContent := p.input[controlContentStart:controlContentEnd]
+	p.pos = controlContentEnd + 2 // Advance parser position past "%}"
+
+	trimmedContent := strings.TrimSpace(rawContent)
+	controlInfo, err := parseControlTagDetail(trimmedContent)
+	if err != nil {
+		// If parsing the detail fails (e.g. "if" without condition), we create a node
+		// with ControlUnknown and the error message in Expression for easier debugging.
+		// Alternatively, ParseNext could return this error.
+		// For now, the node is created, and evaluation logic will see ControlUnknown or handle the error.
+		// A simple approach is to make it an unknown tag with the original content.
+		controlInfo = &ControlTagInfo{
+			Type:       ControlUnknown,
+			Expression: fmt.Sprintf("Error parsing tag '%s': %v", trimmedContent, err), // Store error for later
+		}
+	}
+
+	// If parseControlTagDetail returns an error, controlInfo might be nil or partially filled.
+	// For robustness, ensure controlInfo is not nil before creating the node,
+	// or ensure parseControlTagDetail always returns a valid (even if "error" tagged) info.
+	// The current parseControlTagDetail will return an error and a partially filled info for "unknown".
+	// If it errors on valid tags like "if" without condition, it returns the error.
+	// Let's ensure we always have a controlInfo, possibly marking it as parse_error.
+	if controlInfo == nil && err != nil { // Should not happen if parseControlTagDetail is implemented carefully
+		controlInfo = &ControlTagInfo{Type: ControlUnknown, Expression: fmt.Sprintf("Critical parsing error for: %s", trimmedContent)}
+	}
+
+	return &Node{
+		Type:    NodeControlTag,
+		Content: trimmedContent, // Store the trimmed raw content for reference
+		Control: controlInfo,    // Store the parsed details
+	}
+}
+
+// parseExpressionTag is called when "{{" is found.
 // It extracts the content between "{{" and "}}".
 // This remains largely the same, but the content it extracts will be processed by evaluateFullExpressionInternal.
 func (p *Parser) parseExpressionTag() *Node {
@@ -549,6 +729,17 @@ func (p *Parser) ParseNext() (*Node, error) {
 		// Treat "{#" as literal text. Fall through.
 	}
 
+	// Check for control tag marker "{%"
+	if strings.HasPrefix(p.input[p.pos:], "{%") {
+		controlNode := p.parseControlTag()
+		if controlNode != nil {
+			return controlNode, nil
+		}
+		// If controlNode is nil, parseControlTag failed (e.g., "%}" not found).
+		// p.pos was reset by parseControlTag.
+		// Treat "{%" as literal text. Fall through.
+	}
+
 	// Check if current position starts with an expression marker "{{"
 	if strings.HasPrefix(p.input[p.pos:], "{{") {
 		// Attempt to parse it as a full expression tag
@@ -565,19 +756,28 @@ func (p *Parser) ParseNext() (*Node, error) {
 	}
 
 	// Text parsing logic:
-	// Find the next occurrence of "{#", "{{" or end of string.
+	// Find the next occurrence of "{#", "{{", "{%" or end of string.
 	// This search starts from the current p.pos.
 	nextCommentMarkerIndex := strings.Index(p.input[p.pos:], "{#")
 	nextExprMarkerIndex := strings.Index(p.input[p.pos:], "{{")
+	nextControlMarkerIndex := strings.Index(p.input[p.pos:], "{%")
 
 	// Determine the earliest marker
 	nextMarkerPos := -1
+
 	if nextCommentMarkerIndex != -1 {
 		nextMarkerPos = nextCommentMarkerIndex
 	}
+
 	if nextExprMarkerIndex != -1 {
 		if nextMarkerPos == -1 || nextExprMarkerIndex < nextMarkerPos {
 			nextMarkerPos = nextExprMarkerIndex
+		}
+	}
+
+	if nextControlMarkerIndex != -1 {
+		if nextMarkerPos == -1 || nextControlMarkerIndex < nextMarkerPos {
+			nextMarkerPos = nextControlMarkerIndex
 		}
 	}
 
@@ -615,6 +815,7 @@ func (p *Parser) ParseNext() (*Node, error) {
 		// Find the next occurrence of "{#" or "{{" starting from searchTextStartOffset
 		nextNextCommentIdxRel := strings.Index(p.input[searchTextStartOffset:], "{#")
 		nextNextExprIdxRel := strings.Index(p.input[searchTextStartOffset:], "{{")
+		nextNextControlIdxRel := strings.Index(p.input[searchTextStartOffset:], "{%")
 
 		nextNextMarkerAbs := -1
 
@@ -626,6 +827,12 @@ func (p *Parser) ParseNext() (*Node, error) {
 		}
 		if nextNextExprIdxRel != -1 {
 			currentAbs := searchTextStartOffset + nextNextExprIdxRel
+			if nextNextMarkerAbs == -1 || currentAbs < nextNextMarkerAbs {
+				nextNextMarkerAbs = currentAbs
+			}
+		}
+		if nextNextControlIdxRel != -1 {
+			currentAbs := searchTextStartOffset + nextNextControlIdxRel
 			if nextNextMarkerAbs == -1 || currentAbs < nextNextMarkerAbs {
 				nextNextMarkerAbs = currentAbs
 			}
