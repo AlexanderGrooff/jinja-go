@@ -483,17 +483,17 @@ func parseControlTagDetail(trimmedContent string) (*ControlTagInfo, error) {
 			// Jinja's {% endif %} typically does not take arguments.
 			return nil, fmt.Errorf("endif tag does not take any arguments, e.g., {%% endif %%}")
 		}
-	// case "else": // Future implementation
-	// 	info.Type = ControlElse
-	// 	if len(parts) > 1 {
-	// 		return nil, fmt.Errorf("else tag does not take arguments")
-	// 	}
-	// case "elif": // Future implementation
-	// 	info.Type = ControlElseIf
-	// 	if len(parts) < 2 {
-	// 		return nil, fmt.Errorf("elif tag requires a condition")
-	// 	}
-	// 	info.Expression = strings.Join(parts[1:], " ")
+	case "else":
+		info.Type = ControlElse
+		if len(parts) > 1 {
+			return nil, fmt.Errorf("else tag does not take any arguments, e.g., {%% else %%}")
+		}
+	case "elif":
+		info.Type = ControlElseIf
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("elif tag requires a condition, e.g., {%% elif user.isGuest %%}")
+		}
+		info.Expression = strings.Join(parts[1:], " ")
 	// case "for": // Future implementation
 	//  info.Type = ControlFor
 	//  // ... parse "item in items" ...

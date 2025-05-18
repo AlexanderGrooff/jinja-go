@@ -291,6 +291,31 @@ func TestParser_ParseNext(t *testing.T) {
 			want:     []*Node{{Type: NodeControlTag, Content: "endif this", Control: &ControlTagInfo{Type: ControlUnknown, Expression: "Error parsing tag 'endif this': endif tag does not take any arguments, e.g., {% endif %}"}}},
 		},
 		{
+			name:     "simple control tag - else",
+			template: "{% else %}",
+			want:     []*Node{{Type: NodeControlTag, Content: "else", Control: &ControlTagInfo{Type: ControlElse}}},
+		},
+		{
+			name:     "control tag - else with arguments (invalid)",
+			template: "{% else somearg %}",
+			want:     []*Node{{Type: NodeControlTag, Content: "else somearg", Control: &ControlTagInfo{Type: ControlUnknown, Expression: "Error parsing tag 'else somearg': else tag does not take any arguments, e.g., {% else %}"}}},
+		},
+		{
+			name:     "simple control tag - elif",
+			template: "{% elif condition2 %}",
+			want:     []*Node{{Type: NodeControlTag, Content: "elif condition2", Control: &ControlTagInfo{Type: ControlElseIf, Expression: "condition2"}}},
+		},
+		{
+			name:     "control tag - elif with complex condition",
+			template: "{% elif item.value == 100 or is_admin %}",
+			want:     []*Node{{Type: NodeControlTag, Content: "elif item.value == 100 or is_admin", Control: &ControlTagInfo{Type: ControlElseIf, Expression: "item.value == 100 or is_admin"}}},
+		},
+		{
+			name:     "control tag - elif missing condition (invalid)",
+			template: "{% elif %}",
+			want:     []*Node{{Type: NodeControlTag, Content: "elif", Control: &ControlTagInfo{Type: ControlUnknown, Expression: "Error parsing tag 'elif': elif tag requires a condition, e.g., {% elif user.isGuest %}"}}},
+		},
+		{
 			name:     "unclosed control tag - if",
 			template: "text {% if condition",
 			want: []*Node{

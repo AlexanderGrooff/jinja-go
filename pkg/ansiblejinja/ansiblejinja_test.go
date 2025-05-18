@@ -575,6 +575,113 @@ func TestTemplateString_IfStatements(t *testing.T) {
 			want:     " Val is 10",
 			wantErr:  false,
 		},
+		// If/Elif/Else/Endif tests
+		{
+			name:     "if true - else/elif not processed",
+			template: "{% if cond1 %}A{% elif cond2 %}B{% else %}C{% endif %}D",
+			context:  map[string]interface{}{"cond1": true, "cond2": true},
+			want:     "AD",
+			wantErr:  false,
+		},
+		{
+			name:     "if false, elif true - else not processed",
+			template: "{% if cond1 %}A{% elif cond2 %}B{% else %}C{% endif %}D",
+			context:  map[string]interface{}{"cond1": false, "cond2": true},
+			want:     "BD",
+			wantErr:  false,
+		},
+		{
+			name:     "if false, elif false, else processed",
+			template: "{% if cond1 %}A{% elif cond2 %}B{% else %}C{% endif %}D",
+			context:  map[string]interface{}{"cond1": false, "cond2": false},
+			want:     "CD",
+			wantErr:  false,
+		},
+		{
+			name:     "if false, no elif, else processed",
+			template: "{% if cond1 %}A{% else %}C{% endif %}D",
+			context:  map[string]interface{}{"cond1": false},
+			want:     "CD",
+			wantErr:  false,
+		},
+		{
+			name:     "multiple elif - first true",
+			template: "{% if c1 %}1{% elif c2 %}2{% elif c3 %}3{% else %}4{% endif %}",
+			context:  map[string]interface{}{"c1": false, "c2": true, "c3": true},
+			want:     "2",
+			wantErr:  false,
+		},
+		{
+			name:     "multiple elif - second true",
+			template: "{% if c1 %}1{% elif c2 %}2{% elif c3 %}3{% else %}4{% endif %}",
+			context:  map[string]interface{}{"c1": false, "c2": false, "c3": true},
+			want:     "3",
+			wantErr:  false,
+		},
+		{
+			name:     "multiple elif - none true, else processed",
+			template: "{% if c1 %}1{% elif c2 %}2{% elif c3 %}3{% else %}4{% endif %}",
+			context:  map[string]interface{}{"c1": false, "c2": false, "c3": false},
+			want:     "4",
+			wantErr:  false,
+		},
+		{
+			name:     "if false, only elif, elif false, nothing rendered from block",
+			template: "X{% if c1 %}A{% elif c2 %}B{% endif %}Y",
+			context:  map[string]interface{}{"c1": false, "c2": false},
+			want:     "XY",
+			wantErr:  false,
+		},
+		{
+			name:     "nested if-else constructs",
+			template: "{% if o1 %}O1{% if i1 %}I1{% else %}I2{% endif %}{% else %}O2{% if i2 %}I3{% else %}I4{% endif %}{% endif %}",
+			context:  map[string]interface{}{"o1": true, "i1": false, "i2": true},
+			want:     "O1I2",
+			wantErr:  false,
+		},
+		{
+			name:     "nested if-else constructs - outer else branch",
+			template: "{% if o1 %}O1{% if i1 %}I1{% else %}I2{% endif %}{% else %}O2{% if i2 %}I3{% else %}I4{% endif %}{% endif %}",
+			context:  map[string]interface{}{"o1": false, "i1": true, "i2": false},
+			want:     "O2I4",
+			wantErr:  false,
+		},
+		// Error cases for else/elif
+		{
+			name:     "else outside if block",
+			template: "Hello {% else %} World",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
+		{
+			name:     "elif outside if block",
+			template: "Hello {% elif cond %} World",
+			context:  map[string]interface{}{"cond": true},
+			want:     "",
+			wantErr:  true,
+		},
+		{
+			name:     "misplaced endif before else",
+			template: "{% if true %}A{% endif %}{% else %}B{% endif %}",
+			context:  map[string]interface{}{},
+			want:     "", // First endif closes the if, second else is orphaned
+			wantErr:  true,
+		},
+		{
+			name:     "else with arguments (parser should mark as unknown, then rendering fails)",
+			template: "{% if true %}A{% else badarg %}B{% endif %}",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
+		{
+			name:     "elif without condition (parser should mark as unknown, then rendering fails)",
+			template: "{% if false %}A{% elif %}B{% endif %}",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
 	}
 
 	for _, tt := range tests {
