@@ -33,7 +33,7 @@ type NodeType int
 const (
 	NodeText       NodeType = iota // Represents a segment of literal text.
 	NodeExpression                 // Represents a Jinja expression, e.g., {{ variable }}.
-	// NodeComment             // Future: Represents a comment, e.g., {# comment #}.
+	NodeComment                    // Represents a comment, e.g., {# comment #}.
 	// NodeTag                 // Future: Represents a control structure tag, e.g., {% if ... %}.
 )
 
@@ -398,6 +398,41 @@ func parseFilterCall(filterCallStr string) (name string, args []string, err erro
 	return name, finalArgs, nil
 }
 
+// parseCommentTag is called when "{#" is found.
+// It extracts the content between "{#" and "#}".
+func (p *Parser) parseCommentTag() *Node {
+	originalPos := p.pos // For potential backtrack if parsing fails
+
+	// Ensure we are actually at the start of a comment tag
+	if !(p.pos+2 <= len(p.input) && p.input[p.pos:p.pos+2] == "{#") {
+		return nil // Not a comment tag, or called incorrectly.
+	}
+
+	p.pos += 2                   // Consume "{#"
+	commentContentStart := p.pos // The actual content starts after "{#"
+
+	// Find the closing "#}"
+	// Unlike expressions, comments typically don't have complex nesting rules
+	// that require level counting or string literal skipping for the basic parsing of the comment block itself.
+	// The content of the comment can be anything, including "{{" or other "{#".
+	endMarkerIndex := strings.Index(p.input[p.pos:], "#}")
+	if endMarkerIndex == -1 {
+		// Error: unclosed comment tag.
+		p.pos = originalPos // Backtrack
+		return nil          // Indicate failure.
+	}
+
+	// If we reach here, a matching "#}" was found.
+	// The content is from commentContentStart to p.pos + endMarkerIndex.
+	content := p.input[commentContentStart : p.pos+endMarkerIndex]
+	p.pos += endMarkerIndex + 2 // Advance parser position past "#}"
+
+	return &Node{
+		Type:    NodeComment,
+		Content: content, // The content of the comment itself
+	}
+}
+
 // parseTag is called when "{{" is found.
 // It extracts the content between "{{" and "}}".
 // This remains largely the same, but the content it extracts will be processed by evaluateFullExpressionInternal.
@@ -503,6 +538,17 @@ func (p *Parser) ParseNext() (*Node, error) {
 		return nil, nil // EOF, no error
 	}
 
+	// Check for comment marker "{#"
+	if strings.HasPrefix(p.input[p.pos:], "{#") {
+		commentNode := p.parseCommentTag()
+		if commentNode != nil {
+			return commentNode, nil
+		}
+		// If commentNode is nil, parseCommentTag failed (e.g. "#}" not found).
+		// p.pos was reset by parseCommentTag.
+		// Treat "{#" as literal text. Fall through.
+	}
+
 	// Check if current position starts with an expression marker "{{"
 	if strings.HasPrefix(p.input[p.pos:], "{{") {
 		// Attempt to parse it as a full expression tag
@@ -519,12 +565,24 @@ func (p *Parser) ParseNext() (*Node, error) {
 	}
 
 	// Text parsing logic:
-	// Find the next occurrence of "{{" or end of string.
+	// Find the next occurrence of "{#", "{{" or end of string.
 	// This search starts from the current p.pos.
-	nextMarkerIndexInSubstring := strings.Index(p.input[p.pos:], "{{")
+	nextCommentMarkerIndex := strings.Index(p.input[p.pos:], "{#")
+	nextExprMarkerIndex := strings.Index(p.input[p.pos:], "{{")
 
-	if nextMarkerIndexInSubstring == -1 {
-		// No more "{{" markers, the rest of the input is text.
+	// Determine the earliest marker
+	nextMarkerPos := -1
+	if nextCommentMarkerIndex != -1 {
+		nextMarkerPos = nextCommentMarkerIndex
+	}
+	if nextExprMarkerIndex != -1 {
+		if nextMarkerPos == -1 || nextExprMarkerIndex < nextMarkerPos {
+			nextMarkerPos = nextExprMarkerIndex
+		}
+	}
+
+	if nextMarkerPos == -1 {
+		// No more markers, the rest of the input is text.
 		content := p.input[p.pos:]
 		p.pos = len(p.input)   // Consume the rest of the input
 		if len(content) == 0 { // Should only happen if called again after already at EOF
@@ -533,46 +591,63 @@ func (p *Parser) ParseNext() (*Node, error) {
 		return &Node{Type: NodeText, Content: content}, nil
 	}
 
-	if nextMarkerIndexInSubstring == 0 {
-		// This means p.input[p.pos:] starts with "{{" AND parseExpressionTag (called above) failed for it.
-		// So, this specific "{{" is literal. The text node should include this "{{"
-		// and extend until the *next* "{{" that could start a new valid expression, or EOF.
+	if nextMarkerPos == 0 {
+		// This means p.input[p.pos:] starts with a marker AND its parsing failed above.
+		// So, this specific marker (e.g. "{#", "{{") is literal.
+		// The text node should include this marker and extend until the *next* different marker
+		// that could start a new valid tag, or EOF.
 
-		// Search for the next "{{" starting *after* the first character of the current problematic "{{"
-		// to ensure progress.
-		searchTextStartOffset := p.pos + 1 // Start search after the initial '{'
+		// We need to decide how much to consume as text. If it was "{{ an unclosed expr",
+		// we should consume "{{".
+		// Let's consume just the first character of the broken marker to ensure progress and re-evaluate.
+		// Or, more robustly, find the *next earliest* different type of marker or actual next marker.
 
-		// Handle edge cases where input is very short (e.g., just "{" or "{{")
-		if searchTextStartOffset > len(p.input) { // e.g., input at p.pos is just "{"
+		// Search for the next marker of any type starting *after* the first character
+		// of the current problematic marker to ensure progress.
+		searchTextStartOffset := p.pos + 1
+
+		if searchTextStartOffset >= len(p.input) { // e.g., input at p.pos is just "{" or "{#"
 			content := p.input[p.pos:]
 			p.pos = len(p.input)
 			return &Node{Type: NodeText, Content: content}, nil
 		}
 
-		// If p.input[p.pos:] was "{{" and parseExpressionTag failed, searchTextStartOffset is p.pos + 1.
-		// input[searchTextStartOffset:] is the second "{". Index of "{{" in "{" is -1.
-		nextNextMarkerRelIndex := strings.Index(p.input[searchTextStartOffset:], "{{")
+		// Find the next occurrence of "{#" or "{{" starting from searchTextStartOffset
+		nextNextCommentIdxRel := strings.Index(p.input[searchTextStartOffset:], "{#")
+		nextNextExprIdxRel := strings.Index(p.input[searchTextStartOffset:], "{{")
 
-		if nextNextMarkerRelIndex == -1 {
-			// No more "{{" found after the current problematic one.
+		nextNextMarkerAbs := -1
+
+		if nextNextCommentIdxRel != -1 {
+			currentAbs := searchTextStartOffset + nextNextCommentIdxRel
+			if nextNextMarkerAbs == -1 || currentAbs < nextNextMarkerAbs {
+				nextNextMarkerAbs = currentAbs
+			}
+		}
+		if nextNextExprIdxRel != -1 {
+			currentAbs := searchTextStartOffset + nextNextExprIdxRel
+			if nextNextMarkerAbs == -1 || currentAbs < nextNextMarkerAbs {
+				nextNextMarkerAbs = currentAbs
+			}
+		}
+
+		if nextNextMarkerAbs == -1 {
+			// No more markers found after the current problematic one.
 			// The rest of the string from p.pos is literal text.
 			content := p.input[p.pos:]
 			p.pos = len(p.input)
 			return &Node{Type: NodeText, Content: content}, nil
 		}
 
-		// Another "{{" was found. The text segment goes from p.pos up to this new "{{"
-		// nextNextMarkerRelIndex is relative to searchTextStartOffset.
-		// Absolute end of the text segment is searchTextStartOffset + nextNextMarkerRelIndex.
-		endOfTextAbs := searchTextStartOffset + nextNextMarkerRelIndex
-		content := p.input[p.pos:endOfTextAbs]
-		p.pos = endOfTextAbs // p.pos is now at the start of the *next* "{{"
+		// Another marker was found. The text segment goes from p.pos up to this new marker.
+		content := p.input[p.pos:nextNextMarkerAbs]
+		p.pos = nextNextMarkerAbs // p.pos is now at the start of the *next* marker
 		return &Node{Type: NodeText, Content: content}, nil
 
-	} else { // nextMarkerIndexInSubstring > 0
-		// Text exists before the next "{{"
-		content := p.input[p.pos : p.pos+nextMarkerIndexInSubstring]
-		p.pos += nextMarkerIndexInSubstring // Advance p.pos to the start of the next "{{"
+	} else { // nextMarkerPos > 0
+		// Text exists before the next marker
+		content := p.input[p.pos : p.pos+nextMarkerPos]
+		p.pos += nextMarkerPos // Advance p.pos to the start of the next marker
 		return &Node{Type: NodeText, Content: content}, nil
 	}
 }

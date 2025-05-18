@@ -191,6 +191,55 @@ func TestTemplateString(t *testing.T) {
 			context:  map[string]interface{}{"nil_val": nil},
 			want:     "Value: IsNil",
 		},
+		// Comment Tests for TemplateString
+		{
+			name:     "template with only a comment",
+			template: "{# this is a comment #}",
+			context:  map[string]interface{}{},
+			want:     "",
+		},
+		{
+			name:     "template with comment and text",
+			template: "Hello {# comment #}World",
+			context:  map[string]interface{}{},
+			want:     "Hello World",
+		},
+		{
+			name:     "template with comment at the beginning",
+			template: "{# comment #}Hello World",
+			context:  map[string]interface{}{},
+			want:     "Hello World",
+		},
+		{
+			name:     "template with comment at the end",
+			template: "Hello World{# comment #}",
+			context:  map[string]interface{}{},
+			want:     "Hello World",
+		},
+		{
+			name:     "template with multiple comments",
+			template: "Text1 {# comment1 #}Text2{# comment2 #}Text3",
+			context:  map[string]interface{}{},
+			want:     "Text1 Text2Text3",
+		},
+		{
+			name:     "template with comment and variable",
+			template: "Value: {{ val }} {# this is a comment about val #}",
+			context:  map[string]interface{}{"val": "test"},
+			want:     "Value: test ",
+		},
+		{
+			name:     "template with comment containing {{}}",
+			template: "Data {# {{ fake_expr }} #}{{ real_val }} A{#B#}C",
+			context:  map[string]interface{}{"real_val": "XYZ"},
+			want:     "Data XYZ AC",
+		},
+		{
+			name:     "unclosed comment",
+			template: "Hello {# unclosed comment",
+			context:  map[string]interface{}{},
+			want:     "Hello {# unclosed comment", // Unclosed comment is treated as text by parser
+		},
 	}
 
 	for _, tt := range tests {

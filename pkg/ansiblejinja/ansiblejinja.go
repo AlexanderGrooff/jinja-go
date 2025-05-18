@@ -29,18 +29,33 @@ func TemplateString(template string, context map[string]interface{}) (string, er
 			// evaluateFullExpressionInternal will handle parsing this content, including filters.
 			evalResult, wasUndefined, evalErr := evaluateFullExpressionInternal(node.Content, context)
 			if evalErr != nil {
-				return "", fmt.Errorf("failed to evaluate expression '%s': %v", node.Content, evalErr)
-			}
-			if wasUndefined {
-				// If strictly undefined and not handled by a filter (like default), Jinja typically renders an empty string.
-				// No action needed as we don't write anything to the result.
-			} else if evalResult != nil {
-				result.WriteString(fmt.Sprint(evalResult))
+				// Check for specific error related to nested expressions
+				if strings.Contains(evalErr.Error(), "nested {{ or }} found") || strings.Contains(evalErr.Error(), "unclosed expression tag") {
+					return "", fmt.Errorf("error processing template: %w", evalErr)
+				}
+				// For TemplateString, if a simple variable is not found (strictlyUndefined is true) and no default filter resolved it,
+				// Jinja typically renders it as an empty string rather than erroring out.
+				// If an error occurred that isn't just a strict undefined lookup (e.g. bad filter syntax), that's different.
+				if wasUndefined && evalResult == nil { // val might be non-nil if default filter handled it
+					// Append nothing for undefined variables, effectively an empty string.
+				} else if evalErr != nil && !wasUndefined { // A real error not from simple undefinedness
+					return "", fmt.Errorf("error evaluating expression '%s': %v", node.Content, evalErr)
+				} else {
+					// It was strictly undefined but a filter (like default) might have provided a value.
+					// Or it was found, or it was a literal.
+					result.WriteString(fmt.Sprintf("%v", evalResult))
+				}
 			} else {
-				// evalResult is nil, but wasUndefined is false. This can happen if a variable resolves to nil
-				// or a filter returns nil explicitly. Jinja often renders this as an empty string.
-				// No action needed.
+				// No error, evalResult contains the evaluated result (could be empty string for undefined if not handled by default)
+				// or the actual value.
+				if evalResult == nil && wasUndefined { // Explicitly handle if evaluate decided undefined means nil here
+					// append nothing
+				} else {
+					result.WriteString(fmt.Sprintf("%v", evalResult))
+				}
 			}
+		case NodeComment:
+			// Comments are ignored, do nothing
 		default:
 			return "", fmt.Errorf("unknown node type: %v", node.Type)
 		}
