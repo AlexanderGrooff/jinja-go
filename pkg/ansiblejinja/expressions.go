@@ -948,3 +948,209 @@ func ParseAndEvaluate(expr string, context map[string]interface{}) (interface{},
 
 	return result, nil
 }
+
+// evaluateCompoundExpression evaluates an expression and if needed follows multiple subscript operations
+// This is helpful for complex expressions like {'a':{'b':1}}['a']['b'] which are common in Jinja
+func evaluateCompoundExpression(expr string, context map[string]interface{}) (interface{}, error) {
+	// Check if we need special handling for compound subscript expressions
+	if containsSubscript(expr) {
+		// Try the direct evaluation with the existing parser first
+		parser := NewExpressionParser(expr)
+		if err := parser.tokenize(); err != nil {
+			return nil, fmt.Errorf("lexical error: %v", err)
+		}
+
+		// For complex expressions like {'a': {'b': 1}}['a']['b'], we need to handle this specially
+		if (strings.HasPrefix(expr, "{") && strings.Contains(expr, "}[")) ||
+			(strings.HasPrefix(expr, "[") && strings.Contains(expr, "][")) {
+			return parseAndEvaluateCompoundExpression(expr, context)
+		}
+
+		// For simpler expressions, try normal parsing
+		result, err := ParseAndEvaluate(expr, context)
+		if err == nil {
+			return result, nil
+		}
+	}
+
+	// For expressions without compound operations, evaluate normally
+	return ParseAndEvaluate(expr, context)
+}
+
+// containsSubscript checks if the expression contains subscript operations
+func containsSubscript(expr string) bool {
+	return strings.Contains(expr, "[") && strings.Contains(expr, "]")
+}
+
+// parseAndEvaluateCompoundExpression handles compound expressions that involve
+// literals with chained subscript access like {'a':{'b':1}}['a']['b']
+func parseAndEvaluateCompoundExpression(expr string, context map[string]interface{}) (interface{}, error) {
+	// First, find the base expression - either a dictionary or list literal
+	var baseLiteralEnd int
+	var baseValue interface{}
+	var err error
+
+	// Identify if we're dealing with a dict or list literal
+	if strings.HasPrefix(expr, "{") {
+		// Parse the dictionary literal
+		closeBracePos := findMatchingCloseBrace(expr, 0)
+		if closeBracePos == -1 {
+			return nil, fmt.Errorf("syntax error: unclosed dictionary literal")
+		}
+
+		dictLiteral := expr[:closeBracePos+1]
+		baseValue, err = ParseAndEvaluate(dictLiteral, context)
+		if err != nil {
+			return nil, err
+		}
+		baseLiteralEnd = closeBracePos + 1
+	} else if strings.HasPrefix(expr, "[") {
+		// Parse the list literal
+		closeBracketPos := findMatchingCloseBracket(expr, 0)
+		if closeBracketPos == -1 {
+			return nil, fmt.Errorf("syntax error: unclosed list literal")
+		}
+
+		listLiteral := expr[:closeBracketPos+1]
+		baseValue, err = ParseAndEvaluate(listLiteral, context)
+		if err != nil {
+			return nil, err
+		}
+		baseLiteralEnd = closeBracketPos + 1
+	} else {
+		// Not a compound literal expression
+		return ParseAndEvaluate(expr, context)
+	}
+
+	// Now handle the subscript operations
+	currentValue := baseValue
+	pos := baseLiteralEnd
+
+	for pos < len(expr) && expr[pos] == '[' {
+		closePos := findMatchingCloseBracket(expr, pos)
+		if closePos == -1 {
+			return nil, fmt.Errorf("syntax error: unclosed subscript at position %d", pos)
+		}
+
+		// Extract and evaluate the key/index
+		keyExpr := expr[pos+1 : closePos]
+		keyValue, err := ParseAndEvaluate(keyExpr, context)
+		if err != nil {
+			return nil, err
+		}
+
+		// Apply the subscript to the current value
+		switch v := currentValue.(type) {
+		case map[string]interface{}:
+			// Convert the key to a string for map access
+			key := fmt.Sprintf("%v", keyValue)
+			value, exists := v[key]
+			if !exists {
+				return nil, fmt.Errorf("key '%s' not found in map", key)
+			}
+			currentValue = value
+
+		case []interface{}:
+			// Convert the key to an integer for list access
+			index, err := toInteger(keyValue)
+			if err != nil {
+				return nil, fmt.Errorf("list index must be an integer, got %T", keyValue)
+			}
+
+			// Handle negative indices (Python-style)
+			if index < 0 {
+				index += len(v)
+			}
+
+			if index < 0 || index >= len(v) {
+				return nil, fmt.Errorf("list index out of range: %d", index)
+			}
+
+			currentValue = v[index]
+
+		default:
+			return nil, fmt.Errorf("cannot apply subscript to %T", currentValue)
+		}
+
+		// Move past this subscript
+		pos = closePos + 1
+	}
+
+	return currentValue, nil
+}
+
+// findMatchingCloseBrace finds the position of the matching closing brace for a
+// dictionary literal, handling nested structures and quoted strings
+func findMatchingCloseBrace(s string, startPos int) int {
+	braceCount := 0
+	inString := false
+	stringDelim := rune(0)
+
+	for i := startPos; i < len(s); i++ {
+		ch := rune(s[i])
+
+		// Handle string literals
+		if ch == '\'' || ch == '"' {
+			if !inString {
+				inString = true
+				stringDelim = ch
+			} else if ch == stringDelim {
+				inString = false
+			}
+			continue
+		}
+
+		if inString {
+			continue
+		}
+
+		if ch == '{' {
+			braceCount++
+		} else if ch == '}' {
+			braceCount--
+			if braceCount == 0 {
+				return i
+			}
+		}
+	}
+
+	return -1 // No matching brace found
+}
+
+// findMatchingCloseBracket finds the position of the matching closing bracket for a
+// list literal or subscript, handling nested structures and quoted strings
+func findMatchingCloseBracket(s string, startPos int) int {
+	bracketCount := 0
+	inString := false
+	stringDelim := rune(0)
+
+	for i := startPos; i < len(s); i++ {
+		ch := rune(s[i])
+
+		// Handle string literals
+		if ch == '\'' || ch == '"' {
+			if !inString {
+				inString = true
+				stringDelim = ch
+			} else if ch == stringDelim {
+				inString = false
+			}
+			continue
+		}
+
+		if inString {
+			continue
+		}
+
+		if ch == '[' {
+			bracketCount++
+		} else if ch == ']' {
+			bracketCount--
+			if bracketCount == 0 {
+				return i
+			}
+		}
+	}
+
+	return -1 // No matching bracket found
+}

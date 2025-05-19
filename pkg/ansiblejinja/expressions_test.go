@@ -426,6 +426,53 @@ func TestParseAndEvaluate(t *testing.T) {
 			context: map[string]interface{}{},
 			want:    19, // (2^3) * 2 + 3 = 8 * 2 + 3 = 16 + 3 = 19
 		},
+
+		// Nested dictionary tests
+		{
+			name:    "nested dictionary literal creation",
+			expr:    "{'a': {'b': 1, 'c': 2}, 'd': {'e': 3}}",
+			context: map[string]interface{}{},
+			want:    map[string]interface{}{"a": map[string]interface{}{"b": 1, "c": 2}, "d": map[string]interface{}{"e": 3}},
+		},
+		{
+			name: "nested dictionary access via subscript",
+			expr: "data['a']['b']",
+			context: map[string]interface{}{
+				"data": map[string]interface{}{
+					"a": map[string]interface{}{
+						"b": 1,
+						"c": 2,
+					},
+				},
+			},
+			want: 1,
+		},
+		{
+			name: "nested dictionary access via attributes",
+			expr: "data.a.b",
+			context: map[string]interface{}{
+				"data": map[string]interface{}{
+					"a": map[string]interface{}{
+						"b": 1,
+						"c": 2,
+					},
+				},
+			},
+			want: 1,
+		},
+		{
+			name: "mixed access methods - attribute and subscript",
+			expr: "data.a['c']",
+			context: map[string]interface{}{
+				"data": map[string]interface{}{
+					"a": map[string]interface{}{
+						"b": 1,
+						"c": 2,
+					},
+				},
+			},
+			want: 2,
+		},
 	}
 
 	for _, tt := range tests {
@@ -456,6 +503,160 @@ func TestParseAndEvaluate(t *testing.T) {
 
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ParseAndEvaluate() = %v (%T), want %v (%T)", got, got, tt.want, tt.want)
+			}
+		})
+	}
+}
+
+// TestEvaluateCompoundExpression specifically tests complex nested expressions
+// that require multiple subscript operations
+func TestEvaluateCompoundExpression(t *testing.T) {
+	tests := []struct {
+		name      string
+		expr      string
+		context   map[string]interface{}
+		want      interface{}
+		wantError bool
+	}{
+		{
+			name: "deeply nested dictionary",
+			expr: "nested_dict['level1']['level2']['level3']['value']",
+			context: map[string]interface{}{
+				"nested_dict": map[string]interface{}{
+					"level1": map[string]interface{}{
+						"level2": map[string]interface{}{
+							"level3": map[string]interface{}{
+								"value": 42,
+							},
+						},
+					},
+				},
+			},
+			want: 42,
+		},
+		{
+			name: "nested dictionary with list values",
+			expr: "user_list['users'][1]['name']",
+			context: map[string]interface{}{
+				"user_list": map[string]interface{}{
+					"users": []interface{}{
+						map[string]interface{}{
+							"name": "Alice",
+							"age":  30,
+						},
+						map[string]interface{}{
+							"name": "Bob",
+							"age":  25,
+						},
+					},
+				},
+			},
+			want: "Bob",
+		},
+		{
+			name: "mixed access with variable context",
+			expr: "data['items'][0]['name']",
+			context: map[string]interface{}{
+				"data": map[string]interface{}{
+					"items": []interface{}{
+						map[string]interface{}{
+							"name":  "Item 1",
+							"price": 19.99,
+						},
+						map[string]interface{}{
+							"name":  "Item 2",
+							"price": 29.99,
+						},
+					},
+				},
+			},
+			want: "Item 1",
+		},
+		{
+			name: "dictionary in dictionary with mixed keys",
+			expr: "nested_map['a']['b']['c']",
+			context: map[string]interface{}{
+				"nested_map": map[string]interface{}{
+					"a": map[string]interface{}{
+						"b": map[string]interface{}{
+							"c": 42,
+						},
+					},
+				},
+			},
+			want: 42,
+		},
+		{
+			name: "list in dictionary in list",
+			expr: "list_dict_list[0]['items'][1]",
+			context: map[string]interface{}{
+				"list_dict_list": []interface{}{
+					map[string]interface{}{
+						"items": []interface{}{10, 20, 30},
+					},
+				},
+			},
+			want: 20,
+		},
+		{
+			name:    "evaluate dictionary literal",
+			expr:    "{'a': 1, 'b': 2}",
+			context: map[string]interface{}{},
+			want:    map[string]interface{}{"a": 1, "b": 2},
+		},
+		{
+			name:    "evaluate nested dictionary literal",
+			expr:    "{'a': {'b': 1, 'c': 2}}",
+			context: map[string]interface{}{},
+			want:    map[string]interface{}{"a": map[string]interface{}{"b": 1, "c": 2}},
+		},
+		{
+			name:    "direct access to literal - dict",
+			expr:    "{'a': 1}['a']",
+			context: map[string]interface{}{},
+			want:    1,
+		},
+		{
+			name:    "direct access to literal - list",
+			expr:    "[10, 20, 30][1]",
+			context: map[string]interface{}{},
+			want:    20,
+		},
+		{
+			name:    "compound subscript on literal nested dict",
+			expr:    "{'level1': {'level2': {'level3': {'value': 42}}}}['level1']['level2']['level3']['value']",
+			context: map[string]interface{}{},
+			want:    42,
+		},
+		{
+			name:    "compound subscript on literal mixed dict and list",
+			expr:    "{'users': [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}]}['users'][1]['name']",
+			context: map[string]interface{}{},
+			want:    "Bob",
+		},
+		{
+			name:    "compound subscript on literal list with dict",
+			expr:    "[{'a': 1}, {'a': 2}, {'a': 3}][1]['a']",
+			context: map[string]interface{}{},
+			want:    2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := evaluateCompoundExpression(tt.expr, tt.context)
+
+			if (err != nil) != tt.wantError {
+				t.Errorf("evaluateCompoundExpression() error = %v, wantError %v", err, tt.wantError)
+				return
+			}
+
+			if tt.wantError {
+				return
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("evaluateCompoundExpression() = %v (%T), want %v (%T)", got, got, tt.want, tt.want)
 			}
 		})
 	}

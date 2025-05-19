@@ -1,0 +1,9 @@
+---
+description: 
+globs: *.go
+alwaysApply: false
+---
+Whenever adding new functionality, like extra support for Jinja syntax, make sure to add:
+- Unit tests to cover parser behaviour in [parser_test.go](mdc:pkg/ansiblejinja/parser_test.go) and [expressions_test.go](mdc:pkg/ansiblejinja/expressions_test.go)
+- Unit tests to cover TemplateString and EvaluateExpression behaviour in [ansiblejinja_test.go](mdc:pkg/ansiblejinja/ansiblejinja_test.go)
+- Benchmarking tests in [benchmark_test.go](mdc:pkg/ansiblejinja/benchmark_test.go)

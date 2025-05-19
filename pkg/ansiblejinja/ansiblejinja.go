@@ -118,3 +118,19 @@ func EvaluateExpression(expression string, context map[string]interface{}) (inte
 
 	return val, nil
 }
+
+// EvaluateCompoundExpression evaluates complex expressions including deeply nested dictionary
+// and list operations like {'users': [{'name': 'Alice'}]}['users'][0]['name']
+// It handles these by internally breaking them down into multiple operations.
+func EvaluateCompoundExpression(expression string, context map[string]interface{}) (interface{}, error) {
+	// Trim leading/trailing spaces
+	trimmedExpression := strings.TrimSpace(expression)
+
+	// Use the lower-level function to properly handle compound expressions
+	val, err := evaluateCompoundExpression(trimmedExpression, context)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate compound expression '%s': %v", expression, err)
+	}
+
+	return val, nil
+}

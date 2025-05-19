@@ -14,11 +14,5 @@ ansible-jinja-go
 *.swp
 *.swo
 
-# Benchstat files - only track previous.txt
-benchstat/latest.txt
-benchstat/current.txt
-benchstat/compare.txt
-benchstat/reports/
-
 # Direnv
 .direnv/ 

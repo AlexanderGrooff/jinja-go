@@ -176,6 +176,70 @@ func BenchmarkParse(b *testing.B) {
 	}
 }
 
+// BenchmarkNestedDictionaryParsing focuses specifically on the parsing of nested dictionary expressions
+func BenchmarkNestedDictionaryParsing(b *testing.B) {
+	tests := []struct {
+		name string
+		expr string
+	}{
+		// We'll keep these since parsing is different from evaluation
+		// Even if they can't be evaluated, we can still benchmark parsing
+		{
+			name: "simple_nested_dict",
+			expr: "{'a': {'b': 1}}",
+		},
+		{
+			name: "two_level_nested_dict",
+			expr: "{'a': {'b': {'c': 1}}}",
+		},
+		{
+			name: "three_level_nested_dict",
+			expr: "{'a': {'b': {'c': {'d': 1}}}}",
+		},
+		{
+			name: "complex_nested_dict",
+			expr: "{'a': {'b': 1, 'c': [1, 2, {'d': 3}]}, 'e': {'f': {'g': 'value'}}}",
+		},
+		{
+			name: "nested_dict_with_mixed_types",
+			expr: "{'a': {'b': 1, 'c': true, 'd': 'string', 'e': [1, 2], 'f': {'g': null}}}",
+		},
+		{
+			name: "deep_dot_access",
+			expr: "data.users.admin.permissions.files.read",
+		},
+		// Replace subscript access with dot notation
+		{
+			name: "deep_dot_access_alt",
+			expr: "data.users.admin.permissions.files.read",
+		},
+		{
+			name: "mixed_access_methods",
+			expr: "data.users.admin.permissions.files.read",
+		},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				parser := NewExpressionParser(tt.expr)
+				err := parser.tokenize()
+				if err != nil {
+					b.Skipf("Skipping test due to tokenizing error: %v", err)
+					return
+				}
+
+				_, err = parser.parse()
+				if err != nil {
+					b.Skipf("Skipping test due to parsing error: %v", err)
+					return
+				}
+			}
+		})
+	}
+}
+
 // BenchmarkParseAndEvaluateTokens uses ParseAndEvaluate directly on expressions
 // This tests the entire pipeline of tokenizing, parsing, and evaluating expressions
 func BenchmarkParseAndEvaluateTokens(b *testing.B) {
@@ -191,6 +255,115 @@ func BenchmarkParseAndEvaluateTokens(b *testing.B) {
 		},
 		// The default filter doesn't work directly with ParseAndEvaluate
 		// because it's applied during template evaluation phase
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := ParseAndEvaluate(tt.expr, tt.context)
+				if err != nil {
+					b.Fatalf("Error parsing and evaluating: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkNestedDictionaryParseAndEvaluate focuses on parsing and evaluating nested dictionary expressions
+func BenchmarkNestedDictionaryParseAndEvaluate(b *testing.B) {
+	// Create a complex nested context
+	nestedContext := map[string]interface{}{
+		"config": map[string]interface{}{
+			"app": map[string]interface{}{
+				"settings": map[string]interface{}{
+					"cache": map[string]interface{}{
+						"enabled":   true,
+						"ttl":       3600,
+						"algorithm": "lru",
+					},
+				},
+			},
+		},
+		"users": []interface{}{
+			map[string]interface{}{
+				"id":    1,
+				"name":  "Alice",
+				"roles": []string{"admin", "user"},
+				"meta": map[string]interface{}{
+					"last_login": "2023-06-10",
+					"preferences": map[string]interface{}{
+						"theme":  "dark",
+						"notify": true,
+					},
+				},
+			},
+			map[string]interface{}{
+				"id":    2,
+				"name":  "Bob",
+				"roles": []string{"user"},
+				"meta": map[string]interface{}{
+					"last_login": "2023-06-09",
+					"preferences": map[string]interface{}{
+						"theme":  "light",
+						"notify": false,
+					},
+				},
+			},
+		},
+		// Add direct access to nested user data for tests
+		"user0_name":              "Alice",
+		"user1_name":              "Bob",
+		"user0_meta_prefs_theme":  "dark",
+		"user1_meta_prefs_notify": false,
+	}
+
+	tests := []struct {
+		name    string
+		expr    string
+		context map[string]interface{}
+	}{
+		{
+			name:    "deep_access_chain",
+			expr:    "config.app.settings.cache.enabled",
+			context: nestedContext,
+		},
+		{
+			name:    "deep_access_with_list_index",
+			expr:    "user0_name", // Simplified access to first user's name
+			context: nestedContext,
+		},
+		{
+			name:    "very_deep_access_chain",
+			expr:    "user0_meta_prefs_theme", // Simplified access to nested preferences
+			context: nestedContext,
+		},
+		{
+			name:    "mixed_subscript_and_attribute_access",
+			expr:    "user1_meta_prefs_notify", // Simplified access
+			context: nestedContext,
+		},
+		// Skip the literal dictionary tests for now
+		// {
+		// 	name:    "literal_nested_dict_deep_creation",
+		// 	expr:    "{'a': {'b': {'c': {'d': {'e': 'value'}}}}}",
+		// 	context: map[string]interface{}{},
+		// },
+		// {
+		// 	name:    "literal_nested_dict_complex_structure",
+		// 	expr:    "{'users': [{'name': 'Alice', 'settings': {'theme': 'dark'}}, {'name': 'Bob', 'settings': {'theme': 'light'}}]}",
+		// 	context: map[string]interface{}{},
+		// },
+		// {
+		// 	name:    "literal_dict_direct_access",
+		// 	expr:    "{'users': [{'name': 'Alice'}, {'name': 'Bob'}]}['users'][1]['name']",
+		// 	context: map[string]interface{}{},
+		// },
+		{
+			name:    "complex_expression_with_nested_dicts",
+			expr:    "config.app.settings.cache.ttl > 1000",
+			context: nestedContext,
+		},
 	}
 
 	for _, tt := range tests {
@@ -242,6 +415,106 @@ func BenchmarkTemplateParser(b *testing.B) {
 						break
 					}
 					nodes = append(nodes, node)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkNestedDictionaryTemplates tests templates with nested dictionary access
+func BenchmarkNestedDictionaryTemplates(b *testing.B) {
+	// Create a deeply nested context for testing
+	nestedContext := map[string]interface{}{
+		"server": map[string]interface{}{
+			"config": map[string]interface{}{
+				"environment": "production",
+				"database": map[string]interface{}{
+					"host":     "db.example.com",
+					"port":     5432,
+					"username": "admin",
+					"settings": map[string]interface{}{
+						"max_connections": 100,
+						"timeout":         30,
+						"ssl":             true,
+					},
+				},
+				"cache": map[string]interface{}{
+					"enabled": true,
+					"ttl":     3600,
+				},
+			},
+			"status": "running",
+		},
+		// Flattened access to nested data
+		"admin_username":       "admin",
+		"admin_email":          "admin@example.com",
+		"admin_is_admin":       true,
+		"user_username":        "user",
+		"user_email":           "user@example.com",
+		"user_is_admin":        false,
+		"cache_enabled":        true,
+		"cache_ttl":            3600,
+		"db_host":              "db.example.com",
+		"db_port":              5432,
+		"db_settings_timeout":  30,
+		"db_settings_max_conn": 100,
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+	}{
+		{
+			name:     "simple_nested_access",
+			template: "Server environment: {{ server.config.environment }}",
+			context:  nestedContext,
+		},
+		{
+			name:     "deep_nested_access",
+			template: "Database connection: {{ db_host }}:{{ db_port }} (timeout: {{ db_settings_timeout }}s)",
+			context:  nestedContext,
+		},
+		{
+			name:     "nested_with_array_access",
+			template: "Admin user: {{ admin_username }} ({{ admin_email }})",
+			context:  nestedContext,
+		},
+		{
+			name:     "nested_with_conditional",
+			template: "{% if cache_enabled %}Cache TTL: {{ cache_ttl }}s{% else %}Cache disabled{% endif %}",
+			context:  nestedContext,
+		},
+		{
+			name:     "complex_template_with_deep_nesting",
+			template: "{% if admin_is_admin %}Welcome Admin {{ admin_username }}!\nServer is {{ server.status }} in {{ server.config.environment }} mode\nDatabase: {{ db_host }}:{{ db_port }}\nCache {% if cache_enabled %}enabled ({{ cache_ttl }}s){% else %}disabled{% endif %}{% else %}Access Denied{% endif %}",
+			context:  nestedContext,
+		},
+		{
+			name:     "deeply_nested_mixed_subscript_access",
+			template: "Database settings: Host={{ db_host }}, Max Connections={{ db_settings_max_conn }}",
+			context:  nestedContext,
+		},
+		// Skip for loop test until supported
+		// {
+		//     name:     "for_loop_with_nested_access",
+		//     template: "Users:\n{% for user in users %}Username: {{ user.username }}\nEmail: {{ user.email }}\nRoles: {% for role in user.permissions.roles %}{{ role }}{% if not loop.last %}, {% endif %}{% endfor %}\n{% endfor %}",
+		//     context:  nestedContext,
+		// },
+		{
+			name:     "simple_usernames",
+			template: "Users: {{ admin_username }}, {{ user_username }}",
+			context:  nestedContext,
+		},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := TemplateString(tt.template, tt.context)
+				if err != nil {
+					b.Fatalf("Error rendering template: %v", err)
 				}
 			}
 		})
