@@ -29,3 +29,5 @@ Operators and data types also need to be implemented. Think of:
 - Function calls, like `post.render()`
 - Mapping lookup such as `item['key']`
 - Pythonic objects such as lists `[1,"abc",{3: 4}]`, dictionaries `{123: "abc"}`, booleans `true`/`false`, etc
+
+Keep track of features that are implemented, or still left to be implemented, in [README.md](mdc:README.md).

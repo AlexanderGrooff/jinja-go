@@ -14,6 +14,52 @@ Additionally, the library will support:
 -   Built-in functions and filters comparable to those in Ansible's Jinja (e.g., `lookup`, `urlencode`, `map`, `default`).
 -   Basic flow control structures (e.g., `{% for item in items %}`, `{% if condition %}`).
 
+## Implementation Status
+
+### Already Implemented Features
+
+- **Template Syntax**
+  - Basic variable substitution (`{{ variable }}`)
+  - Comments (`{# comment #}`)
+  - Conditional statements (`{% if %}`, `{% elif %}`, `{% else %}`, `{% endif %}`)
+
+- **Expression Evaluation**
+  - Basic literals (integers, floats, strings, booleans, null/None)
+  - Variable access and context lookup
+  - Pythonic data types:
+    - Lists (`[1, 2, 3]`)
+    - Dictionaries (`{'key': 'value'}`)
+  - Object/attribute access (`object.attribute`)
+  - Subscript access (`array[index]`, `dict['key']`, negative indices)
+
+- **Operators**
+  - Arithmetic operators (`+`, `-`, `*`, `/`, `//` (floor division), `%` (modulo), `**` (power))
+  - Unary operators (`not`, `-`, `+`)
+  - Comparison operators (`==`, `!=`, `>`, `<`, `>=`, `<=`)
+  - Logical operators (`and`, `or`) with short-circuit evaluation
+  - Identity operators (`is`, `is not`)
+  - Membership operators (`in`)
+  - String operations (concatenation, repetition)
+
+- **Filters**
+  - `default` filter
+
+### Planned Features
+
+- **Control Structures**
+  - For loops (`{% for item in items %}`)
+  - More complex control structures
+
+- **Filters and Functions**
+  - Additional common Ansible Jinja filters (`map`, `urlencode`, etc.)
+  - Lookup plugin support
+  - More built-in functions
+
+- **Advanced Features**
+  - Macro definitions
+  - Include/import functionality
+  - Block/extends for template inheritance
+
 ## Usage
 
 ```go
