@@ -2,7 +2,6 @@ package ansiblejinja
 
 import (
 	"fmt"
-	"reflect"
 )
 
 // This file will contain the logic for handling Jinja control statements
@@ -76,10 +75,7 @@ func handleIfStatement(
 				if evalErr != nil {
 					return "", currentIndex, fmt.Errorf("error evaluating condition for %s '%s': %v", branchType, branchExpression, evalErr)
 				}
-				truthy, truthErr := isTruthy(conditionResult)
-				if truthErr != nil {
-					return "", currentIndex, fmt.Errorf("error determining truthiness for %s '%s': %v", branchType, branchExpression, truthErr)
-				}
+				truthy := isTruthy(conditionResult)
 
 				if truthy {
 					processedContent, err := processBlockNodesFunc(bodyNodes, context)
@@ -153,42 +149,6 @@ func handleIfStatement(
 
 	// If we exit the loop, it means we've processed all branches or reached the endif without meeting a condition.
 	return output, ultimateEndifIndex + 1, nil
-}
-
-// isTruthy determines the truthiness of a value according to Jinja rules.
-// False: false, 0, empty string, empty list/map, nil.
-// True: everything else.
-func isTruthy(value interface{}) (bool, error) {
-	if value == nil {
-		return false, nil
-	}
-
-	v := reflect.ValueOf(value)
-
-	switch v.Kind() {
-	case reflect.Bool:
-		return v.Bool(), nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() != 0, nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return v.Uint() != 0, nil
-	case reflect.Float32, reflect.Float64:
-		return v.Float() != 0.0, nil
-	case reflect.String:
-		return v.Len() > 0, nil
-	case reflect.Array, reflect.Slice, reflect.Map, reflect.Chan:
-		if v.IsNil() {
-			return false, nil
-		}
-		return v.Len() > 0, nil
-	case reflect.Ptr, reflect.Interface:
-		if v.IsNil() {
-			return false, nil
-		}
-		return isTruthy(v.Elem().Interface())
-	default:
-		return true, nil
-	}
 }
 
 // findBlock locates the nodes within a control block (e.g., if...endif) and the index of the closing tag.

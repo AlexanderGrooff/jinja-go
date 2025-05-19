@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Performance of this library is critical. Always ensure that the speed of the Jinja templating engine is as fast as possible.

@@ -22,3 +22,10 @@ Next to this, all builtin functions/filters that are usable in Ansible's Jinja s
 etc.
 
 Also, basic flow-control that Jinja supports should also be supported here. Think of {% for item in items %}, {% if %}, etc.
+
+Operators and data types also need to be implemented. Think of:
+- Equality operators such as `==`, `!=`, `not` etc
+- Math operators such as `*`, `//` etc
+- Function calls, like `post.render()`
+- Mapping lookup such as `item['key']`
+- Pythonic objects such as lists `[1,"abc",{3: 4}]`, dictionaries `{123: "abc"}`, booleans `true`/`false`, etc
