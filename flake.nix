@@ -16,6 +16,7 @@
           nativeBuildInputs = [
             pkgs.go_1_23 # Or your preferred Go version
             pkgs.pre-commit
+            pkgs.gotools # Contains benchstat
             # Add other Go tools or dependencies here if needed, e.g.:
             # pkgs.gopls
             # pkgs.delve

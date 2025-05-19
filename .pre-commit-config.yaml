@@ -11,4 +11,19 @@ repos:
         entry: go test ./pkg/ansiblejinja
         language: system
         types: [go]
-        pass_filenames: false 
+        pass_filenames: false
+    -   id: go-benchmark
+        name: go benchmark
+        description: Run benchmarks and save results
+        entry: bash -c 'go test ./pkg/ansiblejinja -bench=. -benchmem -count=5 > /tmp/bench-new.txt'
+        language: system
+        types: [go]
+        pass_filenames: false
+    -   id: benchstat
+        name: benchstat comparison
+        description: Compare benchmark results with previous run
+        entry: bash -c 'if [ -f /tmp/bench-old.txt ]; then benchstat /tmp/bench-old.txt /tmp/bench-new.txt; mv /tmp/bench-new.txt /tmp/bench-old.txt; else mv /tmp/bench-new.txt /tmp/bench-old.txt; echo "No previous benchmark results to compare against."; fi'
+        language: system
+        types: [go]
+        pass_filenames: false
+        verbose: true 
