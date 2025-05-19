@@ -8,21 +8,21 @@ repos:
         types: [go]
     -   id: go-test
         name: go test
-        entry: go test ./pkg/ansiblejinja
+        entry: make test
         language: system
         types: [go]
         pass_filenames: false
     -   id: go-benchmark
         name: go benchmark
         description: Run benchmarks and save results
-        entry: bash -c 'mkdir -p benchstat && go test ./pkg/ansiblejinja -bench=. -benchmem -count=5 > benchstat/latest.txt'
+        entry: make benchmark-save
         language: system
         types: [go]
         pass_filenames: false
     -   id: benchstat
         name: benchstat comparison
         description: Compare benchmark results with previous run
-        entry: bash -c 'if [ -f benchstat/previous.txt ]; then benchstat benchstat/previous.txt benchstat/latest.txt; mv benchstat/latest.txt benchstat/previous.txt; else mv benchstat/latest.txt benchstat/previous.txt; echo "First benchmark run - results stored for future comparison."; fi'
+        entry: bash -c 'if [ -f benchstat/previous.txt ]; then make benchmark-compare && cp benchstat/latest.txt benchstat/previous.txt; else make benchmark-save-as-previous && echo "First benchmark run - results stored for future comparison."; fi'
         language: system
         types: [go]
         pass_filenames: false
