@@ -1,0 +1,27 @@
+goos: linux
+goarch: amd64
+pkg: github.com/AlexanderGrooff/ansible-jinja-go/pkg/ansiblejinja
+cpu: 12th Gen Intel(R) Core(TM) i7-12700K
+BenchmarkTemplateString/simple_variable-20         	 2545030	       466.4 ns/op	     280 B/op	      15 allocs/op
+BenchmarkTemplateString/multiple_variables-20      	  970766	      1242 ns/op	     704 B/op	      35 allocs/op
+BenchmarkTemplateString/nested_variables-20        	 1000000	      1049 ns/op	     696 B/op	      29 allocs/op
+BenchmarkTemplateString/conditional-20             	  882688	      1255 ns/op	     776 B/op	      33 allocs/op
+BenchmarkTemplateString/large_template-20          	  255076	      4676 ns/op	    2890 B/op	     100 allocs/op
+BenchmarkEvaluateExpression/simple_variable-20     	 7159826	       165.5 ns/op	      96 B/op	       6 allocs/op
+BenchmarkEvaluateExpression/variable_with_default-20         	 1585150	       757.5 ns/op	     312 B/op	      17 allocs/op
+BenchmarkTokenize/simple_expression-20                       	12332187	        95.57 ns/op	      96 B/op	       2 allocs/op
+BenchmarkTokenize/dotted_expression-20                       	 4608387	       258.8 ns/op	     480 B/op	       4 allocs/op
+BenchmarkTokenize/complex_expression-20                      	 2744200	       438.5 ns/op	    1008 B/op	       9 allocs/op
+BenchmarkTokenize/string_with_operators-20                   	 2987605	       402.7 ns/op	    1008 B/op	       9 allocs/op
+BenchmarkTokenize/logical_operators-20                       	 1739059	       690.1 ns/op	    2144 B/op	       6 allocs/op
+BenchmarkParse/simple_expression-20                          	 8953038	       132.9 ns/op	     176 B/op	       3 allocs/op
+BenchmarkParse/dotted_expression-20                          	 2299165	       521.9 ns/op	     824 B/op	      11 allocs/op
+BenchmarkParse/complex_expression-20                         	  956185	      1176 ns/op	    2144 B/op	      28 allocs/op
+BenchmarkParse/string_operations-20                          	 1935950	       618.6 ns/op	     968 B/op	      16 allocs/op
+BenchmarkParse/complex_logical_expression-20                 	  660639	      1680 ns/op	    3544 B/op	      30 allocs/op
+BenchmarkParseAndEvaluateTokens/simple_variable-20           	 8521653	       140.4 ns/op	     176 B/op	       3 allocs/op
+BenchmarkTemplateParser/simple_template-20                   	 6062149	       202.3 ns/op	     152 B/op	       6 allocs/op
+BenchmarkTemplateParser/complex_template-20                  	 1953200	       626.8 ns/op	     504 B/op	      17 allocs/op
+BenchmarkTemplateParser/mixed_content-20                     	 2152750	       571.6 ns/op	     536 B/op	      14 allocs/op
+PASS
+ok  	github.com/AlexanderGrooff/ansible-jinja-go/pkg/ansiblejinja	31.107s

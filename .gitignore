@@ -1,0 +1,24 @@
+# Ignore Go build artifacts
+*.o
+*.a
+*.so
+/_obj/
+/_test/
+
+# Ignore the binary
+ansible-jinja-go
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Benchstat files - only track previous.txt
+benchstat/latest.txt
+benchstat/current.txt
+benchstat/compare.txt
+benchstat/reports/
+
+# Direnv
+.direnv/ 

@@ -47,3 +47,45 @@ func main() {
 	}
 	fmt.Printf("Is Admin: %v\n", isAdmin) // Output: Is Admin: true
 } 
+```
+
+## Benchmarking
+
+Performance is critical for this library. We use benchmarking to ensure that changes don't negatively impact performance.
+
+### Running Benchmarks
+
+```bash
+# Run benchmarks without saving results
+make benchmark
+
+# Run benchmarks and save as latest
+make benchmark-save
+
+# Compare latest benchmarks with previous
+make benchmark-compare
+
+# Save latest as the new previous (baseline)
+make benchmark-save-as-previous
+
+# Compare with another branch
+make benchmark-branch branch=main
+
+# Generate and save a benchmark report
+make benchmark-report
+```
+
+The repository uses [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat) to compare benchmark results, and pre-commit hooks automatically run benchmarks and compare with previous results.
+
+### Pre-commit Hooks
+
+The pre-commit hooks will:
+1. Run benchmarks before each commit
+2. Compare with previous benchmark results 
+3. Show performance changes
+
+Install pre-commit hooks with:
+
+```bash
+pre-commit install
+``` 
