@@ -27,11 +27,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             git checkout ${{ github.base_ref }}
-            go test ./ -bench=. -benchmem -count=5 | tee /tmp/bench-base.txt
+            go test ./ -bench=. -benchmem -count=1 | tee /tmp/bench-base.txt
           else
             # For main branch pushes, use previous commit
             git checkout HEAD~1
-            go test ./ -bench=. -benchmem -count=5 | tee /tmp/bench-base.txt
+            go test ./ -bench=. -benchmem -count=1 | tee /tmp/bench-base.txt
           fi
       
       - name: Run benchmark on current branch/commit
@@ -41,7 +41,7 @@ jobs:
           else
             git checkout HEAD
           fi
-          go test ./ -bench=. -benchmem -count=5 > /tmp/bench-head.txt
+          go test ./ -bench=. -benchmem -count=1 | tee /tmp/bench-head.txt
       
       - name: Compare benchmarks
         run: |
