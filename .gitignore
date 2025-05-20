@@ -6,7 +6,7 @@
 /_test/
 
 # Ignore the binary
-ansible-jinja-go
+jinja-go
 
 # IDE files
 .idea/

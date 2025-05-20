@@ -1,4 +1,4 @@
-package ansiblejinja
+package jinja
 
 import (
 	"reflect"

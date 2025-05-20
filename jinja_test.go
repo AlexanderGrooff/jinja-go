@@ -1,4 +1,4 @@
-package ansiblejinja
+package jinja
 
 import (
 	"os"
@@ -112,7 +112,7 @@ func TestTemplateString(t *testing.T) {
 			want:     "This is not a tag: { { name } }",
 		},
 		{
-			name:     "ansible error case for nested variables",
+			name:     "jinja error case for nested variables",
 			template: "var1 {{ var1 }} and var2 {{ {{ var2 }} }}",
 			context:  map[string]interface{}{"var1": "val1", "var2": "val2"},
 			want:     "",

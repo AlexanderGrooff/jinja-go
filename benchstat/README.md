@@ -1,6 +1,6 @@
 # Benchmark Statistics
 
-This directory contains benchmark results for the Ansible Jinja Go implementation.
+This directory contains benchmark results for the Jinja Go implementation.
 
 The files in this directory:
 - `previous.txt`: Previous benchmark results stored for comparison

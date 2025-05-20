@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/AlexanderGrooff/ansible-jinja-go"
+	"github.com/AlexanderGrooff/jinja-go"
 )
 
 type BenchmarkCase struct {
@@ -42,7 +42,7 @@ func main() {
 		startTime := time.Now()
 
 		for i := 0; i < *iterations; i++ {
-			_, err := ansiblejinja.TemplateString(bm.Template, bm.Context)
+			_, err := jinja.TemplateString(bm.Template, bm.Context)
 			if err != nil {
 				fmt.Printf("Error in benchmark %s: %v\n", bm.Name, err)
 				break

@@ -1,4 +1,4 @@
-package ansiblejinja
+package jinja
 
 /*
 This file implements a LALR (Look-Ahead LR) parser for Jinja expressions.

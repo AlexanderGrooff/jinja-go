@@ -1,6 +1,6 @@
-# Ansible Jinja Go
+# Jinja Go
 
-A Go library that mimics Ansible's Jinja templating behavior.
+A Go library that mimics Jinja's templating behavior.
 
 ## Project Goals
 
@@ -11,7 +11,7 @@ This project aims to provide a reusable library with two main functions:
 
 Additionally, the library will support:
 
--   Built-in functions and filters comparable to those in Ansible's Jinja (e.g., `lookup`, `urlencode`, `map`, `default`).
+-   Built-in functions and filters comparable to those in Jinja (e.g., `lookup`, `urlencode`, `map`, `default`).
 -   Basic flow control structures (e.g., `{% for item in items %}`, `{% if condition %}`).
 
 ## Usage
@@ -22,7 +22,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/AlexanderGrooff/ansible-jinja-go"
+	"github.com/AlexanderGrooff/jinja-go"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// TemplateString example
-	templated, err := ansiblejinja.TemplateString("Hello {{ name }}!", context)
+	templated, err := jinja.TemplateString("Hello {{ name }}!", context)
 	if err != nil {
 		fmt.Printf("TemplateString Error: %v\n", err)
 		return
@@ -40,7 +40,7 @@ func main() {
 	fmt.Println(templated) // Output: Hello World!
 
 	// EvaluateExpression example
-	isAdmin, err := ansiblejinja.EvaluateExpression("isAdmin", context)
+	isAdmin, err := jinja.EvaluateExpression("isAdmin", context)
 	if err != nil {
 		fmt.Printf("EvaluateExpression Error: %v\n", err)
 		return
@@ -197,7 +197,7 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
   - More complex control structures
 
 - **Filters and Functions**
-  - Additional common Ansible Jinja filters (`urlencode`, etc.)
+  - Additional common Jinja filters (`urlencode`, etc.)
   - Additional lookup plugin types for the `lookup` filter
   - More built-in functions
   - Complete set of built-in tests (`defined`, `none`, `iterable`, etc.)
