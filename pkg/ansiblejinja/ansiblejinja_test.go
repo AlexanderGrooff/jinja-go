@@ -1021,3 +1021,148 @@ func TestComplexExpressionEvaluation(t *testing.T) {
 		})
 	}
 }
+
+func TestJoinFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+		err      bool
+	}{
+		{
+			name:     "join string array with comma",
+			template: "{{ strArray|join(',') }}",
+			context:  map[string]interface{}{"strArray": []string{"a", "b", "c"}},
+			expected: "a,b,c",
+			err:      false,
+		},
+		{
+			name:     "join string array with empty string",
+			template: "{{ strArray|join('') }}",
+			context:  map[string]interface{}{"strArray": []string{"a", "b", "c"}},
+			expected: "abc",
+			err:      false,
+		},
+		{
+			name:     "join string array from variable",
+			template: "{{ items|join('-') }}",
+			context:  map[string]interface{}{"items": []string{"x", "y", "z"}},
+			expected: "x-y-z",
+			err:      false,
+		},
+		{
+			name:     "join integer array",
+			template: "{{ intArray|join('|') }}",
+			context:  map[string]interface{}{"intArray": []int{1, 2, 3}},
+			expected: "1|2|3",
+			err:      false,
+		},
+		{
+			name:     "join mixed array",
+			template: "{{ mixedArray|join(' ') }}",
+			context:  map[string]interface{}{"mixedArray": []interface{}{1, "two", true}},
+			expected: "1 two true",
+			err:      false,
+		},
+		{
+			name:     "join with no delimiter (default empty string)",
+			template: "{{ strArray|join }}",
+			context:  map[string]interface{}{"strArray": []string{"a", "b", "c"}},
+			expected: "abc",
+			err:      false,
+		},
+		{
+			name:     "join with non-string delimiter",
+			template: "{{ strArray|join(123) }}",
+			context:  map[string]interface{}{"strArray": []string{"a", "b", "c"}},
+			expected: "", // This will not be reached because of the error
+			err:      true,
+		},
+		{
+			name:     "join on non-array input",
+			template: "{{ 'string'|join(',') }}",
+			context:  map[string]interface{}{},
+			expected: "string",
+			err:      false,
+		},
+		{
+			name:     "join on nil input",
+			template: "{{ nil_var|join(',') }}",
+			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+			err:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if tt.err {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				} else if result != tt.expected {
+					t.Errorf("expected %q, got %q", tt.expected, result)
+				}
+			}
+		})
+	}
+}
+
+func TestJoinFilterDirect(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		context  map[string]interface{}
+		expected interface{}
+		err      bool
+	}{
+		{
+			name:     "join string array with comma - single quotes",
+			expr:     "strArray|join(',')",
+			context:  map[string]interface{}{"strArray": []string{"a", "b", "c"}},
+			expected: "a,b,c",
+			err:      false,
+		},
+		{
+			name:     "join string array with comma - double quotes",
+			expr:     `strArray|join(",")`,
+			context:  map[string]interface{}{"strArray": []string{"a", "b", "c"}},
+			expected: "a,b,c",
+			err:      false,
+		},
+		{
+			name:     "join string array with bare comma - no quotes",
+			expr:     "strArray|join(,)",
+			context:  map[string]interface{}{"strArray": []string{"a", "b", "c"}},
+			expected: "abc", // The parser treats bare comma as empty string
+			err:      false,
+		},
+		{
+			name:     "join string array from variable with dash",
+			expr:     "items|join('-')",
+			context:  map[string]interface{}{"items": []string{"x", "y", "z"}},
+			expected: "x-y-z",
+			err:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := EvaluateExpression(tt.expr, tt.context)
+
+			if (err != nil) != tt.err {
+				t.Errorf("expected error: %v, got error: %v", tt.err, err)
+				return
+			}
+
+			if err == nil && !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("expected %v but got %v", tt.expected, result)
+			}
+		})
+	}
+}

@@ -1,6 +1,7 @@
 package ansiblejinja
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -624,5 +625,54 @@ func benchmarkParsingAndEvaluation(b *testing.B, expression string, context map[
 			b.Fatalf("Failed to evaluate expression: %v", err)
 		}
 		_ = result
+	}
+}
+
+func BenchmarkJoinFilter(b *testing.B) {
+	benchmarks := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+	}{
+		{
+			name:     "join small string array",
+			template: "{{ strArray|join(',') }}",
+			context:  map[string]interface{}{"strArray": []string{"a", "b", "c"}},
+		},
+		{
+			name:     "join medium string array",
+			template: "{{ items|join('-') }}",
+			context: map[string]interface{}{
+				"items": []string{"item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"},
+			},
+		},
+		{
+			name:     "join large string array",
+			template: "{{ bigList|join(',') }}",
+			context: func() map[string]interface{} {
+				list := make([]string, 100)
+				for i := 0; i < 100; i++ {
+					list[i] = fmt.Sprintf("item%d", i)
+				}
+				return map[string]interface{}{"bigList": list}
+			}(),
+		},
+		{
+			name:     "join integer array",
+			template: "{{ intArray|join('|') }}",
+			context:  map[string]interface{}{"intArray": []int{1, 2, 3, 4, 5}},
+		},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := TemplateString(bm.template, bm.context)
+				if err != nil {
+					b.Fatalf("template error: %v", err)
+				}
+			}
+		})
 	}
 }

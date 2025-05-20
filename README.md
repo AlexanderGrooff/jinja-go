@@ -50,6 +50,7 @@ Additionally, the library will support:
 
 - **Filters**
   - `default` filter
+  - `join` filter
 
 ### Planned Features
 
@@ -59,14 +60,18 @@ Additionally, the library will support:
   - Block and extends for template inheritance (`{% block %}`, `{% extends %}`)
   - Set statements (`{% set %}`)
   - With blocks (`{% with %}`)
+  - Loop controls (`{% break %}`, `{% continue %}`)
+  - Whitespace control (using `-` in tags like `{%-` and `-%}`)
+  - Expression statements (`{% do expression %}`)
+  - Debug statements (`{% debug %}`)
 
 - **Expression Evaluation**
-  - ~~Loop structures (`{% for item in items %}`)~~
-  - More filters (e.g., `{{ list | join(', ') }}`, `{{ url | urlencode }}`)
+  - More filters (e.g., `{{ url | urlencode }}`)
   - Tests (`{{ user is defined }}`, `{{ user is not none }}`)
   - String formatting and f-strings
   - List comprehensions
   - Generator expressions (iterables)
+  - Auto-escaping support
 
 - **Control Structures**
   - More complex control structures
@@ -75,11 +80,16 @@ Additionally, the library will support:
   - Additional common Ansible Jinja filters (`map`, `urlencode`, etc.)
   - Lookup plugin support
   - More built-in functions
+  - Complete set of built-in tests (`defined`, `none`, `iterable`, etc.)
+  - Translation/internationalization support (gettext)
 
 - **Advanced Features**
   - Macro definitions
   - Include/import functionality
   - Block/extends for template inheritance
+  - Context scoping and namespaces
+  - Custom tests and filters
+  - Auto-escaping configuration
 
 ### Broader improvements to be made
 

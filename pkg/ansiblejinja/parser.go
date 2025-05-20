@@ -218,10 +218,12 @@ func evaluateLiteralOrVariable(s string, context map[string]interface{}) (interf
 
 // unescapeString handles basic unescaping for string literals.
 func unescapeString(s string) string {
-	s = strings.ReplaceAll(s, "\\\\'", "'")       // Escaped single quote
-	s = strings.ReplaceAll(s, "\\\\\\\"", "\"")   // Escaped double quote
-	s = strings.ReplaceAll(s, "\\\\\\\\", "\\\\") // Escaped backslash
-	// TODO: Add more common escapes like \\n, \\t if necessary
+	s = strings.ReplaceAll(s, "\\'", "'")   // Escaped single quote
+	s = strings.ReplaceAll(s, "\\\"", "\"") // Escaped double quote
+	s = strings.ReplaceAll(s, "\\\\", "\\") // Escaped backslash
+	s = strings.ReplaceAll(s, "\\n", "\n")  // Escaped newline
+	s = strings.ReplaceAll(s, "\\t", "\t")  // Escaped tab
+	s = strings.ReplaceAll(s, "\\r", "\r")  // Escaped carriage return
 	return s
 }
 
@@ -339,10 +341,6 @@ func parseFilterCall(filterCallStr string) (name string, args []string, err erro
 	if !strings.HasSuffix(filterCallStr, ")") {
 		return "", nil, fmt.Errorf("filter call with arguments missing closing parenthesis: '%s'", filterCallStr)
 	}
-	// closeParen := strings.LastIndex(filterCallStr, ")")
-	// if closeParen != len(filterCallStr)-1 { // Defensive, already checked by HasSuffix
-	// 	return "", nil, fmt.Errorf("mismatched parentheses or trailing characters in filter call: '%s'", filterCallStr)
-	// }
 
 	argsStr := filterCallStr[openParen+1 : len(filterCallStr)-1] // Content between ()
 
@@ -362,12 +360,38 @@ func parseFilterCall(filterCallStr string) (name string, args []string, err erro
 	for i, r := range argsStr {
 		switch r {
 		case '\'':
-			if i > 0 && argsStr[i-1] != '\\' {
+			// Check if this is an escaped quote
+			isEscaped := false
+			if i > 0 && argsStr[i-1] == '\\' {
+				// Check if the backslash itself is escaped
+				if i > 1 && argsStr[i-2] == '\\' {
+					// The backslash was escaped, so the quote is not escaped
+					isEscaped = false
+				} else {
+					// The quote is escaped
+					isEscaped = true
+				}
+			}
+
+			if !isEscaped {
 				argInSingleQuote = !argInSingleQuote
 			}
 			currentArg.WriteRune(r)
 		case '"':
-			if i > 0 && argsStr[i-1] != '\\' {
+			// Check if this is an escaped quote
+			isEscaped := false
+			if i > 0 && argsStr[i-1] == '\\' {
+				// Check if the backslash itself is escaped
+				if i > 1 && argsStr[i-2] == '\\' {
+					// The backslash was escaped, so the quote is not escaped
+					isEscaped = false
+				} else {
+					// The quote is escaped
+					isEscaped = true
+				}
+			}
+
+			if !isEscaped {
 				argInDoubleQuote = !argInDoubleQuote
 			}
 			currentArg.WriteRune(r)
