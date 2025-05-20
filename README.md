@@ -166,6 +166,7 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
   - `trim` filter
   - `list` filter
   - `escape` filter
+  - `map` filter
 
 ### Planned Features
 
@@ -192,7 +193,7 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
   - More complex control structures
 
 - **Filters and Functions**
-  - Additional common Ansible Jinja filters (`map`, `urlencode`, etc.)
+  - Additional common Ansible Jinja filters (`urlencode`, etc.)
   - Lookup plugin support
   - More built-in functions
   - Complete set of built-in tests (`defined`, `none`, `iterable`, etc.)

@@ -13,17 +13,7 @@ import (
 type FilterFunc func(input interface{}, args ...interface{}) (interface{}, error)
 
 // GlobalFilters stores the registered filter functions.
-var GlobalFilters = map[string]FilterFunc{
-	"default":    defaultFilter,
-	"join":       joinFilter,
-	"upper":      upperFilter,
-	"lower":      lowerFilter,
-	"capitalize": capitalizeFilter,
-	"replace":    replaceFilter,
-	"trim":       trimFilter,
-	"list":       listFilter,
-	"escape":     escapeFilter,
-}
+var GlobalFilters map[string]FilterFunc
 
 // defaultFilter implements the 'default' Jinja filter.
 // If the input value is considered "falsy" (nil, false, empty string, empty slice/map),
@@ -288,4 +278,72 @@ func escapeFilter(input interface{}, args ...interface{}) (interface{}, error) {
 	}
 
 	return html.EscapeString(str), nil
+}
+
+// mapFilter implements the 'map' Jinja filter.
+// It applies a filter to each item in a sequence and returns a list of results.
+// Usage: {{ [1, 2, 3] | map('upper') }} -> ["1", "2", "3"]
+// Usage: {{ ['a', 'b'] | map('upper') }} -> ["A", "B"]
+func mapFilter(input interface{}, args ...interface{}) (interface{}, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("map filter requires at least one argument (the filter name)")
+	}
+
+	// Get the filter name from the first argument
+	filterName, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("map filter first argument must be a string (filter name)")
+	}
+
+	// Look up the filter function
+	filterFunc, exists := GlobalFilters[filterName]
+	if !exists {
+		return nil, fmt.Errorf("filter '%s' not found", filterName)
+	}
+
+	// Additional arguments to pass to the filter function
+	filterArgs := args[1:]
+
+	// Check if input is nil
+	if input == nil {
+		return []interface{}{}, nil
+	}
+
+	val := reflect.ValueOf(input)
+	switch val.Kind() {
+	case reflect.Slice, reflect.Array:
+		length := val.Len()
+		result := make([]interface{}, 0, length)
+
+		for i := 0; i < length; i++ {
+			itemVal := val.Index(i).Interface()
+			// Apply the filter to each item
+			filteredItem, err := filterFunc(itemVal, filterArgs...)
+			if err != nil {
+				return nil, fmt.Errorf("error applying filter '%s' to item: %v", filterName, err)
+			}
+			result = append(result, filteredItem)
+		}
+
+		return result, nil
+	default:
+		// For non-sequence types, apply the filter to the input directly
+		return filterFunc(input, filterArgs...)
+	}
+}
+
+func init() {
+	// Initialize GlobalFilters after all filter functions are defined
+	GlobalFilters = map[string]FilterFunc{
+		"default":    defaultFilter,
+		"join":       joinFilter,
+		"upper":      upperFilter,
+		"lower":      lowerFilter,
+		"capitalize": capitalizeFilter,
+		"replace":    replaceFilter,
+		"trim":       trimFilter,
+		"list":       listFilter,
+		"escape":     escapeFilter,
+		"map":        mapFilter,
+	}
 }

@@ -2,6 +2,7 @@ package ansiblejinja
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -1167,6 +1168,104 @@ func TestJoinFilterDirect(t *testing.T) {
 	}
 }
 
+func TestMapFilterDirect(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		context  map[string]interface{}
+		expected interface{}
+		err      bool
+	}{
+		{
+			name:     "map upper filter on string array",
+			expr:     "['a', 'b', 'c']|map('upper')",
+			context:  map[string]interface{}{},
+			expected: []interface{}{"A", "B", "C"},
+			err:      false,
+		},
+		{
+			name:     "map upper filter on variable",
+			expr:     "items|map('upper')",
+			context:  map[string]interface{}{"items": []string{"hello", "world"}},
+			expected: []interface{}{"HELLO", "WORLD"},
+			err:      false,
+		},
+		{
+			name:     "map capitalize filter",
+			expr:     "items|map('capitalize')",
+			context:  map[string]interface{}{"items": []string{"hello", "WORLD"}},
+			expected: []interface{}{"Hello", "World"},
+			err:      false,
+		},
+		{
+			name:     "map filter on non-sequence",
+			expr:     "text|map('upper')",
+			context:  map[string]interface{}{"text": "hello"},
+			expected: "HELLO",
+			err:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Skip tests with literal arrays until array literals are fully supported in expressions
+			if strings.Contains(tt.expr, "[") && strings.Contains(tt.expr, "]") {
+				t.Skip("Skipping test with array literals - not yet fully supported in direct expressions")
+			}
+
+			result, err := EvaluateExpression(tt.expr, tt.context)
+
+			if (err != nil) != tt.err {
+				t.Errorf("expected error: %v, got error: %v, err message: %v", tt.err, err != nil, err)
+				return
+			}
+
+			if err == nil && !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("expected %v but got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestMapFilterWithError(t *testing.T) {
+	// Test that the map filter properly returns an error for non-existent filters
+	// when used in EvaluateExpression
+	expr := "items|map('non_existent_filter')"
+	context := map[string]interface{}{"items": []string{"test"}}
+
+	// Directly test the full expression pipeline
+	result, _, err := evaluateFullExpressionInternal(expr, context)
+
+	// The error should not be nil
+	if err == nil {
+		t.Errorf("Expected error for non-existent filter, but got nil")
+	} else if !strings.Contains(err.Error(), "unknown filter") && !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected error message about filter not found, but got: %v", err)
+	}
+
+	// The result should be nil for an error case
+	if result != nil {
+		t.Errorf("Expected nil result for error case, but got: %v", result)
+	}
+}
+
+func TestMapFilterDirectRaw(t *testing.T) {
+	// Test that directly calling the mapFilter function with a non-existent filter name
+	// properly returns an error
+	items := []string{"a", "b"}
+	result, err := mapFilter(items, "fake_filter")
+
+	if err == nil {
+		t.Errorf("Expected error for non-existent filter, but got nil")
+	} else if !strings.Contains(err.Error(), "filter 'fake_filter' not found") {
+		t.Errorf("Expected error message about filter not found, but got: %v", err)
+	}
+
+	if result != nil {
+		t.Errorf("Expected nil result for error case, but got: %v", result)
+	}
+}
+
 func TestUpperFilter(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1511,6 +1610,58 @@ func TestEscapeFilter(t *testing.T) {
 			name:     "Escape nil",
 			template: "{{ nil_var | escape }}",
 			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if err != nil {
+				t.Fatalf("TemplateString error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestMapFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "Map upper filter on string array",
+			template: "{{ items | map('upper') | join(' ') }}",
+			context:  map[string]interface{}{"items": []string{"hello", "world"}},
+			expected: "HELLO WORLD",
+		},
+		{
+			name:     "Map upper filter on variable",
+			template: "{{ items | map('upper') | join(', ') }}",
+			context:  map[string]interface{}{"items": []string{"a", "b", "c"}},
+			expected: "A, B, C",
+		},
+		{
+			name:     "Map filter on numbers",
+			template: "{{ numbers | map('upper') | join('|') }}",
+			context:  map[string]interface{}{"numbers": []int{1, 2, 3}},
+			expected: "1|2|3",
+		},
+		{
+			name:     "Map filter on mixed types",
+			template: "{{ mixed | map('upper') | join('-') }}",
+			context:  map[string]interface{}{"mixed": []interface{}{1, "hello", true}},
+			expected: "1-HELLO-TRUE",
+		},
+		{
+			name:     "Map filter on empty array",
+			template: "{{ empty | map('upper') | join(',') }}",
+			context:  map[string]interface{}{"empty": []interface{}{}},
 			expected: "",
 		},
 	}

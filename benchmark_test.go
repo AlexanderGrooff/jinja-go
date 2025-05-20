@@ -781,3 +781,52 @@ func BenchmarkEscapeFilter(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkMapFilter(b *testing.B) {
+	benchmarks := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+	}{
+		{
+			name:     "map small string array",
+			template: "{{ items | map('upper') | join(',') }}",
+			context:  map[string]interface{}{"items": []string{"a", "b", "c"}},
+		},
+		{
+			name:     "map medium string array",
+			template: "{{ items | map('upper') }}",
+			context: map[string]interface{}{
+				"items": []string{"item1", "item2", "item3", "item4", "item5"},
+			},
+		},
+		{
+			name:     "map large string array",
+			template: "{{ bigList | map('upper') }}",
+			context: func() map[string]interface{} {
+				list := make([]string, 50)
+				for i := 0; i < 50; i++ {
+					list[i] = fmt.Sprintf("item%d", i)
+				}
+				return map[string]interface{}{"bigList": list}
+			}(),
+		},
+		{
+			name:     "map capitalize filter",
+			template: "{{ items | map('capitalize') | join(' ') }}",
+			context:  map[string]interface{}{"items": []string{"hello", "WORLD", "Test"}},
+		},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := TemplateString(bm.template, bm.context)
+				if err != nil {
+					b.Fatalf("template error: %v", err)
+				}
+			}
+		})
+	}
+}

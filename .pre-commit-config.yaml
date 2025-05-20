@@ -20,6 +20,13 @@ repos:
         language: system
         types: [go]
         pass_filenames: false
+    -   id: cross-benchmark
+        name: cross benchmark
+        description: Run benchmarks and save results
+        entry: bash -c 'make cross-benchmark && git add benchstat/cross'
+        language: system
+        types: [go]
+        pass_filenames: false
     -   id: benchstat
         name: benchstat comparison
         description: Compare benchmark results with previous run
