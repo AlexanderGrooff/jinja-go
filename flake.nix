@@ -10,6 +10,12 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        
+        # Create Python environment with required packages
+        pythonEnv = pkgs.python3.withPackages (ps: with ps; [
+          jinja2
+          tabulate
+        ]);
       in
       {
         devShells.default = pkgs.mkShell {
@@ -17,6 +23,7 @@
             pkgs.go_1_23 # Or your preferred Go version
             pkgs.pre-commit
             pkgs.gotools # Contains benchstat
+            pythonEnv    # Python with dependencies
             # Add other Go tools or dependencies here if needed, e.g.:
             # pkgs.gopls
             # pkgs.delve

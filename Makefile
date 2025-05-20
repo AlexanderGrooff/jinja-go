@@ -1,4 +1,4 @@
-.PHONY: test benchmark benchmark-save benchmark-compare benchmark-report
+.PHONY: test benchmark benchmark-save benchmark-compare benchmark-report cross-benchmark
 
 test:
 	go test ./pkg/ansiblejinja
@@ -55,4 +55,10 @@ benchmark-report:
 	benchstat benchstat/previous.txt benchstat/latest.txt >> $$REPORT_FILE; \
 	echo "\`\`\`" >> $$REPORT_FILE; \
 	echo "" >> $$REPORT_FILE; \
-	echo "Report saved to $$REPORT_FILE" 
+	echo "Report saved to $$REPORT_FILE"
+
+# Run cross-language benchmarks to compare Go and Python implementations
+cross-benchmark:
+	@echo "Running cross-language benchmarks..."
+	@cmd/benchmark/run_benchmarks.sh --output-dir benchstat/cross
+	@echo "Cross-language benchmark report saved to benchstat/cross/comparison_report.txt" 

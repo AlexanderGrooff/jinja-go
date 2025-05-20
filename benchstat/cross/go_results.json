@@ -1,0 +1,42 @@
+[
+  {
+    "name": "simple_variable",
+    "execution_time_ms": 0.00048279
+  },
+  {
+    "name": "multiple_variables",
+    "execution_time_ms": 0.0012043099999999999
+  },
+  {
+    "name": "conditional",
+    "execution_time_ms": 0.00167218
+  },
+  {
+    "name": "nested_access",
+    "execution_time_ms": 0.0005545
+  },
+  {
+    "name": "filter_usage",
+    "execution_time_ms": 0.00094774
+  },
+  {
+    "name": "complex_template",
+    "execution_time_ms": 0.004222139999999999
+  },
+  {
+    "name": "deep_nesting",
+    "execution_time_ms": 0.00181725
+  },
+  {
+    "name": "nested_loops",
+    "execution_time_ms": 0.01151917
+  },
+  {
+    "name": "string_manipulation",
+    "execution_time_ms": 0.0016190500000000001
+  },
+  {
+    "name": "complex_conditional",
+    "execution_time_ms": 0.00288432
+  }
+]

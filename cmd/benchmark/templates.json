@@ -1,0 +1,109 @@
+[
+  {
+    "name": "simple_variable",
+    "template": "Hello, {{ name }}!",
+    "context": {"name": "World"}
+  },
+  {
+    "name": "multiple_variables",
+    "template": "{{ greeting }}, {{ name }}! Today is {{ day }}.",
+    "context": {"greeting": "Hello", "name": "World", "day": "Monday"}
+  },
+  {
+    "name": "conditional",
+    "template": "{% if is_admin %}Admin user: {{ user_name }}{% else %}Regular user: {{ user_name }}{% endif %}",
+    "context": {"user_name": "John", "is_admin": true}
+  },
+  {
+    "name": "nested_access",
+    "template": "Server environment: {{ server.config.environment }}",
+    "context": {
+      "server": {
+        "config": {
+          "environment": "production"
+        }
+      }
+    }
+  },
+  {
+    "name": "filter_usage",
+    "template": "{{ items|join(', ') }}",
+    "context": {
+      "items": ["apple", "banana", "cherry"]
+    }
+  },
+  {
+    "name": "complex_template",
+    "template": "{% for user in users %}Name: {{ user.name }}, Age: {{ user.age }}{% if not loop.last %}\n{% endif %}{% endfor %}",
+    "context": {
+      "users": [
+        {"name": "Alice", "age": 30},
+        {"name": "Bob", "age": 25},
+        {"name": "Charlie", "age": 35}
+      ]
+    }
+  },
+  {
+    "name": "deep_nesting",
+    "template": "{% if user.admin %}{{ user.profile.settings.theme }} mode activated for {{ user.profile.name }}{% else %}Standard mode for {{ user.profile.name }}{% endif %}",
+    "context": {
+      "user": {
+        "admin": true,
+        "profile": {
+          "name": "Alice",
+          "settings": {
+            "theme": "dark",
+            "notifications": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "nested_loops",
+    "template": "{% for department in company.departments %}Department: {{ department.name }}\n{% for employee in department.employees %}  - {{ employee.name }} ({{ employee.position }}){% if not loop.last %}\n{% endif %}{% endfor %}{% if not loop.last %}\n{% endif %}{% endfor %}",
+    "context": {
+      "company": {
+        "departments": [
+          {
+            "name": "Engineering",
+            "employees": [
+              {"name": "Alice", "position": "Lead Developer"},
+              {"name": "Bob", "position": "Frontend Developer"},
+              {"name": "Charlie", "position": "Backend Developer"}
+            ]
+          },
+          {
+            "name": "Marketing",
+            "employees": [
+              {"name": "Dave", "position": "Marketing Manager"},
+              {"name": "Eve", "position": "Content Creator"}
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "string_manipulation",
+    "template": "{{ text | upper | replace('WORLD', 'UNIVERSE') | trim }}",
+    "context": {
+      "text": "  hello world  "
+    }
+  },
+  {
+    "name": "complex_conditional",
+    "template": "{% if user.age > 18 and (user.role == 'admin' or user.permissions.edit) %}{{ user.name }} has access{% else %}{{ user.name }} denied{% endif %}",
+    "context": {
+      "user": {
+        "name": "John",
+        "age": 30,
+        "role": "user",
+        "permissions": {
+          "edit": true,
+          "delete": false
+        }
+      }
+    }
+  }
+] 

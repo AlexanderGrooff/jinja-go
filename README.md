@@ -176,9 +176,52 @@ make benchmark-branch branch=main
 
 # Generate and save a benchmark report
 make benchmark-report
+
+# Run cross-language benchmarks against Python's Jinja2
+make cross-benchmark
 ```
 
 The repository uses [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat) to compare benchmark results, and pre-commit hooks automatically run benchmarks and compare with previous results.
+
+### Cross-Language Benchmarks
+
+You can directly compare this Go implementation against Python's Jinja2 using the cross-language benchmarking tools:
+
+```bash
+# Run with default settings
+make cross-benchmark
+
+# Run with custom iterations and output directory
+./cmd/benchmark/run_benchmarks.sh --iterations 5000 --output-dir custom_benchmarks
+
+# Run with custom template test cases
+./cmd/benchmark/run_benchmarks.sh --templates path/to/custom_templates.json
+```
+
+The cross-benchmark tool:
+
+1. Runs identical templates through both the Go and Python implementations
+2. Measures rendering time for each template
+3. Calculates the speed difference (how many times faster Go is)
+4. Generates a detailed comparison report
+
+Custom template test cases can be defined in a JSON file following this format:
+
+```json
+[
+  {
+    "name": "template_name",
+    "template": "Hello, {{ name }}!",
+    "context": {"name": "World"}
+  },
+  // More test cases...
+]
+```
+
+The comparison provides insight into performance characteristics of both implementations, which is useful for:
+- Identifying areas where the Go implementation can be optimized
+- Quantifying performance gains for various template features
+- Tracking performance improvements over time
 
 ### Pre-commit Hooks
 
