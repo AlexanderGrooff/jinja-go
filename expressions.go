@@ -1012,10 +1012,34 @@ func evaluateDotNotation(dotNotation string, context map[string]interface{}) (in
 	// Navigate through the object properties
 	for i := 1; i < len(parts); i++ {
 		propName := parts[i]
-		var err error
-		obj, err = getAttributeValue(obj, propName)
-		if err != nil {
-			return nil, fmt.Errorf("error accessing property '%s' in '%s': %v", propName, dotNotation, err)
+
+		// Handle different types of objects
+		switch v := obj.(type) {
+		case map[string]interface{}:
+			// Direct access to map
+			val, ok := v[propName]
+			if !ok {
+				return nil, fmt.Errorf("property '%s' not found in object", propName)
+			}
+			obj = val
+		case map[interface{}]interface{}:
+			// Handle maps with interface{} keys
+			val, ok := v[propName]
+			if !ok {
+				// Try with string conversion
+				val, ok = v[propName]
+				if !ok {
+					return nil, fmt.Errorf("property '%s' not found in object", propName)
+				}
+			}
+			obj = val
+		default:
+			// For other types, try reflection
+			var err error
+			obj, err = getAttributeValue(obj, propName)
+			if err != nil {
+				return nil, fmt.Errorf("error accessing property '%s' in '%s': %v", propName, dotNotation, err)
+			}
 		}
 	}
 

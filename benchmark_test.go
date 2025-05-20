@@ -830,3 +830,52 @@ func BenchmarkMapFilter(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkItemsFilter(b *testing.B) {
+	tests := []struct {
+		name  string
+		input interface{}
+	}{
+		{
+			name:  "empty_map",
+			input: map[string]interface{}{},
+		},
+		{
+			name:  "small_map",
+			input: map[string]interface{}{"a": 1, "b": 2, "c": 3},
+		},
+		{
+			name: "medium_map",
+			input: map[string]interface{}{
+				"user": "john", "age": 30, "admin": true, "preferences": map[string]string{
+					"theme": "dark", "language": "en",
+				},
+				"roles": []string{"user", "editor"},
+			},
+		},
+		{
+			name: "large_map",
+			input: func() map[string]interface{} {
+				// Create a map with 100 entries
+				result := make(map[string]interface{})
+				for i := 0; i < 100; i++ {
+					result[fmt.Sprintf("key%d", i)] = i
+				}
+				return result
+			}(),
+		},
+	}
+
+	filter := GlobalFilters["items"]
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := filter(tt.input)
+				if err != nil {
+					b.Fatalf("Error applying items filter: %v", err)
+				}
+			}
+		})
+	}
+}

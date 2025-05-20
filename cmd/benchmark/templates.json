@@ -105,5 +105,20 @@
         }
       }
     }
+  },
+  {
+    "name": "items_filter",
+    "template": "{% for key, value in data | items %}{{ key }}: {{ value }}{% if not loop.last %}, {% endif %}{% endfor %}",
+    "context": {
+      "data": {
+        "name": "John",
+        "age": 30,
+        "role": "admin",
+        "settings": {
+          "theme": "dark",
+          "notifications": true
+        }
+      }
+    }
   }
 ] 

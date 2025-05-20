@@ -432,49 +432,83 @@ func power(left, right interface{}) (interface{}, error) {
 	return math.Pow(lnum, rnum), nil
 }
 
-// getAttributeValue gets an attribute from an object (obj.attr)
+// getAttributeValue accesses an attribute of an object.
+// This is similar to obj.attribute in Python.
 func getAttributeValue(obj interface{}, attr string) (interface{}, error) {
 	if obj == nil {
-		return nil, fmt.Errorf("cannot get attribute '%s' of nil", attr)
+		return nil, fmt.Errorf("cannot access attribute of nil")
 	}
 
-	// Check if object is a map[string]interface{}
-	if objMap, ok := obj.(map[string]interface{}); ok {
-		if val, exists := objMap[attr]; exists {
+	// Handle different types of objects for attribute access
+	switch v := obj.(type) {
+	case map[string]interface{}:
+		// If it's a map with string keys, direct access
+		if val, ok := v[attr]; ok {
 			return val, nil
 		}
-		return nil, fmt.Errorf("map has no attribute '%s'", attr)
-	}
+		return nil, fmt.Errorf("attribute '%s' not found in map", attr)
 
-	// Use reflection to get the attribute value
-	objVal := reflect.ValueOf(obj)
-
-	// Check if it's a pointer and dereference if needed
-	if objVal.Kind() == reflect.Ptr {
-		objVal = objVal.Elem()
-	}
-
-	// For struct types, try to get the field
-	if objVal.Kind() == reflect.Struct {
-		// Get the field by name
-		field := objVal.FieldByName(attr)
-		if field.IsValid() {
-			return field.Interface(), nil
+	case map[interface{}]interface{}:
+		// If it's a map with interface{} keys, try string or direct
+		if val, ok := v[attr]; ok {
+			return val, nil
 		}
+		// Try with string conversion
+		if val, ok := v[string(attr)]; ok {
+			return val, nil
+		}
+		return nil, fmt.Errorf("attribute '%s' not found in map", attr)
 
-		// Try method call if field not found
-		method := objVal.MethodByName(attr)
-		if method.IsValid() {
-			// Call the method with no arguments
-			results := method.Call(nil)
-			if len(results) == 0 {
-				return nil, nil
+	default:
+		// Use reflection for other types
+		val := reflect.ValueOf(obj)
+
+		// Dereference pointers
+		if val.Kind() == reflect.Ptr {
+			if val.IsNil() {
+				return nil, fmt.Errorf("cannot access attribute of nil pointer")
 			}
-			return results[0].Interface(), nil
+			val = val.Elem()
+		}
+
+		// Handle different container types
+		switch val.Kind() {
+		case reflect.Struct:
+			// Access struct field
+			field := val.FieldByName(attr)
+			if !field.IsValid() {
+				// Try case-insensitive match as fallback
+				for i := 0; i < val.NumField(); i++ {
+					fieldName := val.Type().Field(i).Name
+					if strings.EqualFold(fieldName, attr) {
+						field = val.Field(i)
+						break
+					}
+				}
+				if !field.IsValid() {
+					return nil, fmt.Errorf("attribute '%s' not found in struct", attr)
+				}
+			}
+			return field.Interface(), nil
+
+		case reflect.Map:
+			// Try to access map with string key
+			keyVal := reflect.ValueOf(attr)
+			mapVal := val.MapIndex(keyVal)
+			if !mapVal.IsValid() {
+				// If key is not found, try using a literal string for the key
+				strKey := reflect.ValueOf(string(attr))
+				mapVal = val.MapIndex(strKey)
+				if !mapVal.IsValid() {
+					return nil, fmt.Errorf("key '%s' not found in map", attr)
+				}
+			}
+			return mapVal.Interface(), nil
+
+		default:
+			return nil, fmt.Errorf("cannot access attribute of %s", val.Kind())
 		}
 	}
-
-	return nil, fmt.Errorf("object of type %T has no attribute '%s'", obj, attr)
 }
 
 // getSubscriptValue gets a value by subscript access (obj[key])

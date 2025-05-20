@@ -332,6 +332,35 @@ func mapFilter(input interface{}, args ...interface{}) (interface{}, error) {
 	}
 }
 
+// itemsFilter implements the 'items' Jinja filter.
+// It converts a dictionary/map into a list of key-value pairs.
+// Usage: {{ {'a': 1, 'b': 2} | items }} -> [('a', 1), ('b', 2)]
+func itemsFilter(input interface{}, args ...interface{}) (interface{}, error) {
+	if input == nil {
+		return []interface{}{}, nil
+	}
+
+	val := reflect.ValueOf(input)
+
+	// Only process map types
+	if val.Kind() != reflect.Map {
+		return nil, fmt.Errorf("items filter requires a dictionary/map as input, got %T", input)
+	}
+
+	// Get all keys from the map
+	keys := val.MapKeys()
+	result := make([]interface{}, 0, len(keys))
+
+	// For each key, create a tuple (key, value) and add to result
+	for _, key := range keys {
+		value := val.MapIndex(key)
+		pair := []interface{}{key.Interface(), value.Interface()}
+		result = append(result, pair)
+	}
+
+	return result, nil
+}
+
 func init() {
 	// Initialize GlobalFilters after all filter functions are defined
 	GlobalFilters = map[string]FilterFunc{
@@ -345,5 +374,6 @@ func init() {
 		"list":       listFilter,
 		"escape":     escapeFilter,
 		"map":        mapFilter,
+		"items":      itemsFilter,
 	}
 }

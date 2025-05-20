@@ -1,42 +1,46 @@
 [
   {
     "name": "simple_variable",
-    "execution_time_ms": 0.00047823
+    "execution_time_ms": 0.00046437000000000003
   },
   {
     "name": "multiple_variables",
-    "execution_time_ms": 0.00121481
+    "execution_time_ms": 0.00116467
   },
   {
     "name": "conditional",
-    "execution_time_ms": 0.0016963500000000001
+    "execution_time_ms": 0.00163016
   },
   {
     "name": "nested_access",
-    "execution_time_ms": 0.00056432
+    "execution_time_ms": 0.00067232
   },
   {
     "name": "filter_usage",
-    "execution_time_ms": 0.00099644
+    "execution_time_ms": 0.00091577
   },
   {
     "name": "complex_template",
-    "execution_time_ms": 0.00448407
+    "execution_time_ms": 0.00644463
   },
   {
     "name": "deep_nesting",
-    "execution_time_ms": 0.001873
+    "execution_time_ms": 0.0019931000000000003
   },
   {
     "name": "nested_loops",
-    "execution_time_ms": 0.012039910000000001
+    "execution_time_ms": 0.015276389999999999
   },
   {
     "name": "string_manipulation",
-    "execution_time_ms": 0.00166654
+    "execution_time_ms": 0.00154948
   },
   {
     "name": "complex_conditional",
-    "execution_time_ms": 0.0034479899999999997
+    "execution_time_ms": 0.00291133
+  },
+  {
+    "name": "items_filter",
+    "execution_time_ms": 0.00793956
   }
 ]

@@ -102,15 +102,29 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 		currentValue = bVal
 	} else {
 		// Not a recognized literal. Assume it's a variable name.
-		if !isValidJinjaIdentifier(baseExpr) {
-			return nil, false, fmt.Errorf("invalid syntax for expression or variable name: '%s'", baseExpr)
-		}
-		val, exists := context[baseExpr]
-		if !exists {
-			initialLookupFailed = true
-			currentValue = nil // Represents undefined for now
+
+		// Check for dot notation (e.g., loop.index, user.name)
+		if strings.Contains(baseExpr, ".") && !strings.Contains(baseExpr, " ") {
+			// Try to evaluate as dot notation
+			dotVal, err := evaluateDotNotation(baseExpr, context)
+			if err == nil {
+				currentValue = dotVal
+			} else {
+				initialLookupFailed = true
+				currentValue = nil // Represents undefined for now
+			}
 		} else {
-			currentValue = val
+			// Regular variable lookup
+			if !isValidJinjaIdentifier(baseExpr) {
+				return nil, false, fmt.Errorf("invalid syntax for expression or variable name: '%s'", baseExpr)
+			}
+			val, exists := context[baseExpr]
+			if !exists {
+				initialLookupFailed = true
+				currentValue = nil // Represents undefined for now
+			} else {
+				currentValue = val
+			}
 		}
 	}
 
@@ -526,14 +540,42 @@ func parseControlTagDetail(trimmedContent string) (*ControlTagInfo, error) {
 			return nil, fmt.Errorf("for tag requires an item and collection, e.g., {%% for item in items %%}")
 		}
 
-		// Check that the third part is "in"
-		if strings.ToLower(parts[2]) != "in" {
-			return nil, fmt.Errorf("for tag syntax error: expected 'in', got '%s'", parts[2])
+		// First, check if there's a pipe filter in the expression
+		// If there is, we need to handle it specially
+		inPos := -1
+		for i, part := range parts {
+			if strings.ToLower(part) == "in" {
+				inPos = i
+				break
+			}
 		}
 
-		// The loop variable is the second part (parts[1])
-		// The collection expression is everything after "in" (parts[3:])
-		info.Expression = fmt.Sprintf("%s in %s", parts[1], strings.Join(parts[3:], " "))
+		if inPos == -1 {
+			return nil, fmt.Errorf("for tag requires 'in' keyword, e.g., {%% for item in items %%}")
+		}
+
+		// Check for "for key, value in items" pattern (with or without filters)
+		// This is a key-value unpacking loop
+		if inPos >= 4 && parts[2] == "," {
+			// The loop key variable is parts[1]
+			// The loop value variable is parts[3]
+			// The collection expression is everything after "in"
+			keyVar := strings.TrimSpace(parts[1])
+			valueVar := strings.TrimSpace(parts[3])
+			collectionExpr := strings.Join(parts[inPos+1:], " ")
+
+			info.Expression = fmt.Sprintf("%s, %s in %s", keyVar, valueVar, collectionExpr)
+			return info, nil
+		}
+
+		// Otherwise, this is a standard item-in-collection loop
+		// The loop variable is everything before the "in"
+		// The collection expression is everything after "in"
+		loopVar := strings.Join(parts[1:inPos], " ")
+		collectionExpr := strings.Join(parts[inPos+1:], " ")
+
+		info.Expression = fmt.Sprintf("%s in %s", loopVar, collectionExpr)
+		return info, nil
 	case "endfor":
 		info.Type = ControlEndFor
 		if len(parts) > 1 {

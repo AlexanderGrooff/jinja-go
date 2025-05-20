@@ -256,14 +256,34 @@ func handleForStatement(
 	forNode := nodes[currentIndex]
 	forExpr := forNode.Control.Expression
 
-	// The expression should be in format "item in items"
+	// Check if this is a key-value unpacking pattern (contains a comma)
+	keyValueUnpacking := false
+	var keyVarName, valueVarName string
+
+	// The expression can be in two formats:
+	// 1. "item in items"
+	// 2. "key, value in items"
 	parts := strings.SplitN(forExpr, " in ", 2)
 	if len(parts) != 2 {
 		return "", currentIndex, fmt.Errorf("invalid for loop expression: %s", forExpr)
 	}
 
-	loopVarName := strings.TrimSpace(parts[0])
+	loopVarOrPair := strings.TrimSpace(parts[0])
 	collectionExpr := strings.TrimSpace(parts[1])
+
+	// Check if we have a key-value pair pattern
+	if strings.Contains(loopVarOrPair, ",") {
+		keyValueUnpacking = true
+		pairParts := strings.Split(loopVarOrPair, ",")
+		if len(pairParts) != 2 {
+			return "", currentIndex, fmt.Errorf("invalid key-value unpacking format in for loop: %s", loopVarOrPair)
+		}
+		keyVarName = strings.TrimSpace(pairParts[0])
+		valueVarName = strings.TrimSpace(pairParts[1])
+	} else {
+		// If not key-value unpacking, just use the loop variable name directly
+		// Don't declare a new variable to avoid unused variable warning
+	}
 
 	// Evaluate the collection expression
 	var collectionVal interface{}
@@ -279,265 +299,107 @@ func handleForStatement(
 		}
 	}
 
-	// Convert the collection to a slice for iteration
-	collection, err := convertToSlice(collectionVal)
-	if err != nil {
-		return "", currentIndex, fmt.Errorf("for loop requires an iterable collection: %v", err)
-	}
-
 	// Prepare the results from iterating over the collection
 	var result strings.Builder
 
-	// Create loop context for each iteration
-	for i, item := range collection {
-		// Create a copy of the context for this iteration
-		iterContext := make(map[string]interface{})
-		for k, v := range context {
-			iterContext[k] = v
+	if keyValueUnpacking {
+		// For key-value unpacking, we need to handle maps differently
+		mapVal, ok := collectionVal.(map[string]interface{})
+		if !ok {
+			// Try to convert to a map
+			mapVal, evalErr = convertToMap(collectionVal)
+			if evalErr != nil {
+				return "", currentIndex, fmt.Errorf("for loop with key-value unpacking requires a dictionary/map collection: %v", evalErr)
+			}
 		}
 
-		// Add the loop variable to the context
-		iterContext[loopVarName] = item
+		// Create a slice of items for consistent handling of loop.index, etc.
+		items := make([]struct {
+			Key   interface{}
+			Value interface{}
+		}, 0, len(mapVal))
 
-		// Add the 'loop' special variable with iteration information
-		// Using integers for numeric values to ensure proper comparisons
-		loopInfo := map[string]interface{}{
-			"index":     i + 1,                   // 1-based index
-			"index0":    i,                       // 0-based index
-			"first":     i == 0,                  // True if first iteration
-			"last":      i == len(collection)-1,  // True if last iteration
-			"length":    len(collection),         // Total number of items
-			"revindex":  len(collection) - i,     // Reverse index (1-based)
-			"revindex0": len(collection) - i - 1, // Reverse index (0-based)
+		// Convert map entries to key-value pairs
+		for k, v := range mapVal {
+			items = append(items, struct {
+				Key   interface{}
+				Value interface{}
+			}{k, v})
 		}
-		iterContext["loop"] = loopInfo
 
-		// Declare the function variable first to allow for recursion
-		var customProcessNodesFunc ProcessNodesFunc
-
-		// Define the function implementation
-		customProcessNodesFunc = func(nodes []*Node, loopContext map[string]interface{}) (string, error) {
-			var sb strings.Builder
-			nodeIndex := 0
-
-			for nodeIndex < len(nodes) {
-				node := nodes[nodeIndex]
-				switch node.Type {
-				case NodeExpression:
-					// Special handling for expressions with dot notation in for loops
-					if strings.Contains(node.Content, ".") {
-						// Check for loop.index and other loop variables
-						trimmedContent := strings.TrimSpace(node.Content)
-						if strings.HasPrefix(trimmedContent, "loop.") {
-							loopObj, ok := loopContext["loop"].(map[string]interface{})
-							if ok {
-								parts := strings.SplitN(trimmedContent, ".", 2)
-								if len(parts) == 2 {
-									attrName := parts[1]
-									if val, exists := loopObj[attrName]; exists {
-										sb.WriteString(fmt.Sprintf("%v", val))
-										nodeIndex++
-										continue
-									}
-								}
-							}
-						}
-
-						// Check for item.attribute pattern
-						if strings.Contains(trimmedContent, ".") && !strings.Contains(trimmedContent, " ") {
-							parts := strings.SplitN(trimmedContent, ".", 2)
-							if len(parts) == 2 {
-								obj, exists := loopContext[parts[0]]
-								if exists {
-									if mapObj, isMap := obj.(map[string]interface{}); isMap {
-										if val, hasAttr := mapObj[parts[1]]; hasAttr {
-											sb.WriteString(fmt.Sprintf("%v", val))
-											nodeIndex++
-											continue
-										}
-									}
-								}
-							}
-						}
-					}
-
-					// Fall back to standard evaluation for other expressions
-					val, err := evalExprFunc(node.Content, loopContext)
-					if err != nil {
-						// Try simple string replacement for complex dot expressions
-						trimmed := strings.TrimSpace(node.Content)
-						if strings.Contains(trimmed, ".") {
-							parts := strings.SplitN(trimmed, ".", 2)
-							if len(parts) == 2 && strings.Contains(parts[1], ".") {
-								// Nested attribute access - try to resolve step by step
-								obj, exists := loopContext[parts[0]]
-								if exists {
-									if mapObj, isMap := obj.(map[string]interface{}); isMap {
-										subParts := strings.Split(parts[1], ".")
-										current := mapObj
-										for i, part := range subParts {
-											if i == len(subParts)-1 {
-												if val, exists := current[part]; exists {
-													sb.WriteString(fmt.Sprintf("%v", val))
-													nodeIndex++
-													break
-												}
-											} else {
-												if nextObj, exists := current[part]; exists {
-													if nextMap, isMap := nextObj.(map[string]interface{}); isMap {
-														current = nextMap
-													} else {
-														break
-													}
-												} else {
-													break
-												}
-											}
-										}
-										continue
-									}
-								}
-							}
-						}
-
-						// If all else fails, fall back to evaluateFullExpressionInternal
-						val, wasUndef, _ := evaluateFullExpressionInternal(node.Content, loopContext)
-						if !wasUndef {
-							sb.WriteString(fmt.Sprintf("%v", val))
-						}
-						nodeIndex++
-						continue
-					}
-					sb.WriteString(fmt.Sprintf("%v", val))
-					nodeIndex++
-
-				case NodeControlTag:
-					// Properly handle nested control structures
-					if node.Control == nil {
-						return "", fmt.Errorf("internal parser error: NodeControlTag has nil Control info for content '%s'", node.Content)
-					}
-
-					switch node.Control.Type {
-					case ControlIf:
-						// Delegate to handleIfStatement for nested if blocks
-						renderedBlock, nextIdx, err := handleIfStatement(nodes, nodeIndex, loopContext, func(expression string, ctx map[string]interface{}) (interface{}, error) {
-							// Special handling for comparison with dot notation variables
-							// like "loop.index > 1" or "not loop.last"
-							trimmed := strings.TrimSpace(expression)
-
-							// Handle conditions like "not loop.last"
-							if strings.HasPrefix(trimmed, "not ") && strings.Contains(trimmed, ".") {
-								// Extract variable after "not "
-								varName := strings.TrimSpace(strings.TrimPrefix(trimmed, "not "))
-								// Check if it's directly a dotted variable with no other operations
-								if !strings.Contains(varName, " ") {
-									// Evaluate the variable
-									val, err := evaluateDotNotation(varName, ctx)
-									if err == nil && val != nil {
-										// Apply 'not' operator to the result
-										return !isTruthy(val), nil
-									}
-								}
-							}
-
-							// Handle expressions like "loop.index > 1"
-							if strings.Contains(trimmed, " > ") && strings.Contains(trimmed, ".") {
-								parts := strings.Split(trimmed, " > ")
-								if len(parts) == 2 {
-									leftVar := strings.TrimSpace(parts[0])
-									rightVal := strings.TrimSpace(parts[1])
-
-									// If left part contains dot notation, evaluate it first
-									if strings.Contains(leftVar, ".") && !strings.Contains(leftVar, " ") {
-										left, err := evaluateDotNotation(leftVar, ctx)
-										if err == nil && left != nil {
-											// Now create an expression like "2 > 1" that can be evaluated
-											newExpr := fmt.Sprintf("%v > %s", left, rightVal)
-											result, err := ParseAndEvaluate(newExpr, ctx)
-											if err == nil {
-												return result, nil
-											}
-										}
-									}
-								}
-							}
-
-							// Handle expressions like "loop.index <= 1"
-							if strings.Contains(trimmed, " <= ") && strings.Contains(trimmed, ".") {
-								parts := strings.Split(trimmed, " <= ")
-								if len(parts) == 2 {
-									leftVar := strings.TrimSpace(parts[0])
-									rightVal := strings.TrimSpace(parts[1])
-
-									// If left part contains dot notation, evaluate it first
-									if strings.Contains(leftVar, ".") && !strings.Contains(leftVar, " ") {
-										left, err := evaluateDotNotation(leftVar, ctx)
-										if err == nil && left != nil {
-											// Now create an expression like "2 <= 1" that can be evaluated
-											newExpr := fmt.Sprintf("%v <= %s", left, rightVal)
-											result, err := ParseAndEvaluate(newExpr, ctx)
-											if err == nil {
-												return result, nil
-											}
-										}
-									}
-								}
-							}
-
-							// Try LALR parser directly for expressions without complex dot notation
-							result, err := ParseAndEvaluate(expression, ctx)
-							if err == nil {
-								return result, nil
-							}
-
-							// For simple expressions, fall back to standard evaluation
-							return evalExprFunc(expression, ctx)
-						}, customProcessNodesFunc)
-						if err != nil {
-							return "", err
-						}
-						sb.WriteString(renderedBlock)
-						nodeIndex = nextIdx
-
-					case ControlFor:
-						// Delegate to handleForStatement for nested for loops
-						renderedBlock, nextIdx, err := handleForStatement(nodes, nodeIndex, loopContext, evalExprFunc, customProcessNodesFunc)
-						if err != nil {
-							return "", err
-						}
-						sb.WriteString(renderedBlock)
-						nodeIndex = nextIdx
-
-					case ControlEndIf, ControlEndFor, ControlElse, ControlElseIf:
-						// These should be handled by their respective handlers
-						return "", fmt.Errorf("unexpected control tag '%s' found at node index %d in for loop body. Content: %s",
-							node.Control.Type, nodeIndex, node.Content)
-
-					default:
-						return "", fmt.Errorf("unhandled control tag type in for loop: %s", node.Control.Type)
-					}
-
-				default:
-					// Use standard processing for other node types
-					result, err := processBlockNodesFunc([](*Node){node}, loopContext)
-					if err != nil {
-						return "", err
-					}
-					sb.WriteString(result)
-					nodeIndex++
-				}
+		// Create loop context for each iteration
+		for i, item := range items {
+			// Create a copy of the context for this iteration
+			iterContext := make(map[string]interface{})
+			for k, v := range context {
+				iterContext[k] = v
 			}
 
-			return sb.String(), nil
+			// Add the key and value variables to the context
+			iterContext[keyVarName] = item.Key
+			iterContext[valueVarName] = item.Value
+
+			// Add the 'loop' special variable with proper primitive types for index values
+			// to ensure they're evaluated correctly in templates
+			loopInfo := map[string]interface{}{
+				"index":     i + 1,              // 1-based index
+				"index0":    i,                  // 0-based index
+				"first":     i == 0,             // True if first iteration
+				"last":      i == len(items)-1,  // True if last iteration
+				"length":    len(items),         // Total number of items
+				"revindex":  len(items) - i,     // Reverse index (1-based)
+				"revindex0": len(items) - i - 1, // Reverse index (0-based)
+			}
+			iterContext["loop"] = loopInfo
+
+			// Process the body of the loop with this context
+			renderedNodes, err := processBlockNodesFunc(bodyNodes, iterContext)
+			if err != nil {
+				return "", currentIndex, fmt.Errorf("error processing for loop body: %v", err)
+			}
+			result.WriteString(renderedNodes)
+		}
+	} else {
+		// Original behavior for simple item iteration
+		loopVarName := strings.TrimSpace(loopVarOrPair)
+
+		// Convert the collection to a slice for iteration
+		collection, err := convertToSlice(collectionVal)
+		if err != nil {
+			return "", currentIndex, fmt.Errorf("for loop requires an iterable collection: %v", err)
 		}
 
-		// Process the loop body with the new context and custom processor
-		renderedBody, processErr := customProcessNodesFunc(bodyNodes, iterContext)
-		if processErr != nil {
-			return "", currentIndex, fmt.Errorf("error processing for loop body: %v", processErr)
-		}
+		// Create loop context for each iteration
+		for i, item := range collection {
+			// Create a copy of the context for this iteration
+			iterContext := make(map[string]interface{})
+			for k, v := range context {
+				iterContext[k] = v
+			}
 
-		result.WriteString(renderedBody)
+			// Add the loop variable to the context
+			iterContext[loopVarName] = item
+
+			// Add the 'loop' special variable with primitive types for index values
+			// to ensure they're evaluated correctly in templates
+			loopInfo := map[string]interface{}{
+				"index":     i + 1,                   // 1-based index as int
+				"index0":    i,                       // 0-based index as int
+				"first":     i == 0,                  // True if first iteration
+				"last":      i == len(collection)-1,  // True if last iteration
+				"length":    len(collection),         // Total number of items as int
+				"revindex":  len(collection) - i,     // Reverse index (1-based) as int
+				"revindex0": len(collection) - i - 1, // Reverse index (0-based) as int
+			}
+			iterContext["loop"] = loopInfo
+
+			// Process the body of the loop with this context
+			renderedNodes, err := processBlockNodesFunc(bodyNodes, iterContext)
+			if err != nil {
+				return "", currentIndex, fmt.Errorf("error processing for loop body: %v", err)
+			}
+			result.WriteString(renderedNodes)
+		}
 	}
 
 	return result.String(), endForIndex + 1, nil
@@ -613,4 +475,54 @@ func convertToSlice(val interface{}) ([]interface{}, error) {
 		}
 		return nil, fmt.Errorf("cannot iterate over type %T", val)
 	}
+}
+
+// convertToMap converts a value to a map[string]interface{} if possible.
+// This is used for key-value unpacking in for loops.
+func convertToMap(val interface{}) (map[string]interface{}, error) {
+	if val == nil {
+		return map[string]interface{}{}, nil
+	}
+
+	// If it's already a map[string]interface{}, return it
+	if m, ok := val.(map[string]interface{}); ok {
+		return m, nil
+	}
+
+	// If it's a map with different key types, convert it
+	if reflect.TypeOf(val).Kind() == reflect.Map {
+		mapVal := reflect.ValueOf(val)
+		result := make(map[string]interface{}, mapVal.Len())
+
+		// Iterate through the map entries
+		iter := mapVal.MapRange()
+		for iter.Next() {
+			// Convert key to string
+			key := fmt.Sprintf("%v", iter.Key().Interface())
+			// Get the value
+			value := iter.Value().Interface()
+			result[key] = value
+		}
+
+		return result, nil
+	}
+
+	// For other types, check if they're map-like
+	// For example, a struct could be converted to a map of field names to values
+	if reflect.TypeOf(val).Kind() == reflect.Struct {
+		structVal := reflect.ValueOf(val)
+		structType := structVal.Type()
+		result := make(map[string]interface{}, structType.NumField())
+
+		// Iterate through the struct fields
+		for i := 0; i < structType.NumField(); i++ {
+			fieldName := structType.Field(i).Name
+			fieldValue := structVal.Field(i).Interface()
+			result[fieldName] = fieldValue
+		}
+
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("cannot convert %T to a map", val)
 }

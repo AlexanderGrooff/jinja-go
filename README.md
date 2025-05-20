@@ -167,6 +167,7 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
   - `list` filter
   - `escape` filter
   - `map` filter
+  - `items` filter
 
 ### Planned Features
 

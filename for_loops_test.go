@@ -1,6 +1,8 @@
 package ansiblejinja
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -161,7 +163,7 @@ func TestForLoop(t *testing.T) {
 					}
 				} else if got != tt.want {
 					// Debug specific test cases
-					if tt.name == "for_loop_with_loop_variable" {
+					if tt.name == "for_loop_with_loop_variable" || tt.name == "basic_loop_index_test" {
 						// Get the loop values directly
 						testCtx := make(map[string]interface{})
 						for k, v := range tt.context {
@@ -178,6 +180,11 @@ func TestForLoop(t *testing.T) {
 						lastVal, err2 := EvaluateExpression("loop.last", testCtx)
 						t.Logf("Debug - loop.index=%v (err=%v), loop.last=%v (err=%v)",
 							indexVal, err, lastVal, err2)
+
+						// Add some more debugging to check the template rendering
+						template := "{{ loop.index }}"
+						result, err := TemplateString(template, testCtx)
+						t.Logf("Debug - direct template of loop.index = %v (err=%v)", result, err)
 					}
 					t.Errorf("TemplateString() got = %v, want %v", got, tt.want)
 				}
@@ -232,5 +239,75 @@ Roles: guest
 
 	if result != expected {
 		t.Errorf("TemplateString() complex for loop failed:\nGot:\n%s\nWant:\n%s", result, expected)
+	}
+}
+
+func TestLoopIndexEvaluation(t *testing.T) {
+	testCases := []struct {
+		name       string
+		expression string
+		context    map[string]interface{}
+		want       interface{}
+		wantErr    bool
+	}{
+		{
+			name:       "simple index test",
+			expression: "loop.index",
+			context: map[string]interface{}{
+				"loop": map[string]interface{}{
+					"index": 1,
+				},
+			},
+			want:    1,
+			wantErr: false,
+		},
+		{
+			name:       "direct integer access",
+			expression: "val",
+			context: map[string]interface{}{
+				"val": 42,
+			},
+			want:    42,
+			wantErr: false,
+		},
+		{
+			name:       "direct map value access",
+			expression: "obj.value",
+			context: map[string]interface{}{
+				"obj": map[string]interface{}{
+					"value": "test",
+				},
+			},
+			want:    "test",
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Test EvaluateExpression first
+			got, err := EvaluateExpression(tc.expression, tc.context)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("EvaluateExpression() error = %v, wantErr %v", err, tc.wantErr)
+				return
+			}
+			if !tc.wantErr && !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("EvaluateExpression() got = %v, want %v", got, tc.want)
+			}
+
+			// Then test TemplateString
+			template := "{{ " + tc.expression + " }}"
+			result, err := TemplateString(template, tc.context)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("TemplateString() error = %v, wantErr %v", err, tc.wantErr)
+				return
+			}
+			if !tc.wantErr {
+				expected := fmt.Sprintf("%v", tc.want)
+				if result != expected {
+					t.Errorf("TemplateString() got = %v, want %v", result, expected)
+				}
+			}
+		})
 	}
 }

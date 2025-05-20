@@ -1678,3 +1678,172 @@ func TestMapFilter(t *testing.T) {
 		})
 	}
 }
+
+func TestItemsFilter(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   interface{}
+		want    interface{}
+		wantErr bool
+	}{
+		{
+			name:  "empty map",
+			input: map[string]interface{}{},
+			want:  []interface{}{},
+		},
+		{
+			name:  "string-int map",
+			input: map[string]interface{}{"a": 1, "b": 2},
+			want:  []interface{}{[]interface{}{"a", 1}, []interface{}{"b", 2}},
+		},
+		{
+			name:  "int-string map",
+			input: map[int]string{1: "a", 2: "b"},
+			want:  []interface{}{[]interface{}{1, "a"}, []interface{}{2, "b"}},
+		},
+		{
+			name:  "mixed key-value types",
+			input: map[string]interface{}{"key": "value", "num": 42, "bool": true},
+			want:  []interface{}{[]interface{}{"key", "value"}, []interface{}{"num", 42}, []interface{}{"bool", true}},
+		},
+		{
+			name:    "non-map input",
+			input:   "not a map",
+			wantErr: true,
+		},
+		{
+			name:  "nil input",
+			input: nil,
+			want:  []interface{}{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := GlobalFilters["items"]
+			got, err := filter(tt.input)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("itemsFilter() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if err != nil {
+				return
+			}
+
+			// For maps, the order of keys is not guaranteed, so we need to compare in a way that ignores order
+			gotSlice, ok := got.([]interface{})
+			if !ok {
+				t.Errorf("itemsFilter() returned %T, expected []interface{}", got)
+				return
+			}
+
+			wantSlice, _ := tt.want.([]interface{})
+
+			if len(gotSlice) != len(wantSlice) {
+				t.Errorf("itemsFilter() returned slice of length %d, expected %d", len(gotSlice), len(wantSlice))
+				return
+			}
+
+			if len(gotSlice) == 0 {
+				// Empty slices are equal
+				return
+			}
+
+			// For non-empty slices, build maps from the key-value pairs for comparison
+			gotMap := make(map[interface{}]interface{})
+			for _, pair := range gotSlice {
+				pairSlice := pair.([]interface{})
+				gotMap[pairSlice[0]] = pairSlice[1]
+			}
+
+			wantMap := make(map[interface{}]interface{})
+			for _, pair := range wantSlice {
+				pairSlice := pair.([]interface{})
+				wantMap[pairSlice[0]] = pairSlice[1]
+			}
+
+			// Compare maps
+			if !reflect.DeepEqual(gotMap, wantMap) {
+				t.Errorf("itemsFilter() = %v, want %v", gotMap, wantMap)
+			}
+		})
+	}
+}
+
+// Test how itemsFilter works with TemplateString
+func TestTemplateStringWithItemsFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "simple items filter",
+			template: "{% for k, v in data | items %}{{k}}={{v}},{% endfor %}",
+			context:  map[string]interface{}{"data": map[string]interface{}{"a": 1, "b": 2}},
+			want:     "a=1,b=2,",
+		},
+		{
+			name:     "items filter with empty map",
+			template: "{% for k, v in data | items %}{{k}}={{v}},{% endfor %}",
+			context:  map[string]interface{}{"data": map[string]interface{}{}},
+			want:     "",
+		},
+		{
+			name:     "items filter with non-map",
+			template: "{% for k, v in data | items %}{{k}}={{v}},{% endfor %}",
+			context:  map[string]interface{}{"data": "not a map"},
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := TemplateString(tt.template, tt.context)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TemplateString() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if err != nil {
+				return
+			}
+
+			// For the items filter, the order of iteration is not guaranteed
+			// So we need to verify that all key-value pairs are present
+			if !tt.wantErr && strings.Contains(tt.want, ",") {
+				// Split the results into individual key-value pairs
+				gotPairs := strings.Split(strings.TrimSuffix(got, ","), ",")
+				wantPairs := strings.Split(strings.TrimSuffix(tt.want, ","), ",")
+
+				if len(gotPairs) != len(wantPairs) {
+					t.Errorf("TemplateString() with items filter returned %d pairs, expected %d", len(gotPairs), len(wantPairs))
+					return
+				}
+
+				// Convert to maps for comparison
+				gotMap := make(map[string]bool)
+				for _, pair := range gotPairs {
+					gotMap[pair] = true
+				}
+
+				wantMap := make(map[string]bool)
+				for _, pair := range wantPairs {
+					wantMap[pair] = true
+				}
+
+				for pair := range wantMap {
+					if !gotMap[pair] {
+						t.Errorf("TemplateString() with items filter missing pair %q", pair)
+					}
+				}
+			} else if !tt.wantErr && got != tt.want {
+				t.Errorf("TemplateString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
