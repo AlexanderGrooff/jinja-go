@@ -1166,3 +1166,364 @@ func TestJoinFilterDirect(t *testing.T) {
 		})
 	}
 }
+
+func TestUpperFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "Upper filter on string",
+			template: "{{ 'hello' | upper }}",
+			context:  map[string]interface{}{},
+			expected: "HELLO",
+		},
+		{
+			name:     "Upper filter on variable",
+			template: "{{ text | upper }}",
+			context:  map[string]interface{}{"text": "Hello World"},
+			expected: "HELLO WORLD",
+		},
+		{
+			name:     "Upper filter on number",
+			template: "{{ num | upper }}",
+			context:  map[string]interface{}{"num": 123},
+			expected: "123",
+		},
+		{
+			name:     "Upper filter on nil",
+			template: "{{ nil_var | upper }}",
+			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if err != nil {
+				t.Fatalf("TemplateString error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestLowerFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "Lower filter on string",
+			template: "{{ 'HELLO' | lower }}",
+			context:  map[string]interface{}{},
+			expected: "hello",
+		},
+		{
+			name:     "Lower filter on variable",
+			template: "{{ text | lower }}",
+			context:  map[string]interface{}{"text": "Hello World"},
+			expected: "hello world",
+		},
+		{
+			name:     "Lower filter on number",
+			template: "{{ num | lower }}",
+			context:  map[string]interface{}{"num": 123},
+			expected: "123",
+		},
+		{
+			name:     "Lower filter on nil",
+			template: "{{ nil_var | lower }}",
+			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if err != nil {
+				t.Fatalf("TemplateString error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestCapitalizeFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "Capitalize filter on string",
+			template: "{{ 'hello world' | capitalize }}",
+			context:  map[string]interface{}{},
+			expected: "Hello world",
+		},
+		{
+			name:     "Capitalize filter on uppercase string",
+			template: "{{ 'HELLO WORLD' | capitalize }}",
+			context:  map[string]interface{}{},
+			expected: "Hello world",
+		},
+		{
+			name:     "Capitalize filter on variable",
+			template: "{{ text | capitalize }}",
+			context:  map[string]interface{}{"text": "hello WORLD"},
+			expected: "Hello world",
+		},
+		{
+			name:     "Capitalize filter on number",
+			template: "{{ num | capitalize }}",
+			context:  map[string]interface{}{"num": 123},
+			expected: "123",
+		},
+		{
+			name:     "Capitalize filter on empty string",
+			template: "{{ '' | capitalize }}",
+			context:  map[string]interface{}{},
+			expected: "",
+		},
+		{
+			name:     "Capitalize filter on nil",
+			template: "{{ nil_var | capitalize }}",
+			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if err != nil {
+				t.Fatalf("TemplateString error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestReplaceFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "Replace filter on string",
+			template: "{{ 'Hello World' | replace('Hello', 'Hi') }}",
+			context:  map[string]interface{}{},
+			expected: "Hi World",
+		},
+		{
+			name:     "Replace filter with variable",
+			template: "{{ text | replace('Hello', greeting) }}",
+			context: map[string]interface{}{
+				"text":     "Hello World",
+				"greeting": "Hola",
+			},
+			expected: "Hola World",
+		},
+		{
+			name:     "Replace all occurrences",
+			template: "{{ 'Hello Hello World' | replace('Hello', 'Hi') }}",
+			context:  map[string]interface{}{},
+			expected: "Hi Hi World",
+		},
+		{
+			name:     "Replace with count argument",
+			template: "{{ 'Hello Hello World' | replace('Hello', 'Hi', 1) }}",
+			context:  map[string]interface{}{},
+			expected: "Hi Hello World",
+		},
+		{
+			name:     "Replace on nil",
+			template: "{{ nil_var | replace('a', 'b') }}",
+			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if err != nil {
+				t.Fatalf("TemplateString error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestTrimFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "Trim whitespace",
+			template: "{{ '  Hello  ' | trim }}",
+			context:  map[string]interface{}{},
+			expected: "Hello",
+		},
+		{
+			name:     "Trim with custom characters",
+			template: "{{ 'Hello World' | trim('Hld') }}",
+			context:  map[string]interface{}{},
+			expected: "ello Wor",
+		},
+		{
+			name:     "Trim variable",
+			template: "{{ text | trim }}",
+			context:  map[string]interface{}{"text": "  Hello  "},
+			expected: "Hello",
+		},
+		{
+			name:     "Trim non-string",
+			template: "{{ num | trim }}",
+			context:  map[string]interface{}{"num": 123},
+			expected: "123",
+		},
+		{
+			name:     "Trim nil",
+			template: "{{ nil_var | trim }}",
+			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if err != nil {
+				t.Fatalf("TemplateString error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestListFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "List filter on string",
+			template: "{{ 'abc' | list | join(',') }}",
+			context:  map[string]interface{}{},
+			expected: "a,b,c",
+		},
+		{
+			name:     "List filter on array",
+			template: "{{ array | list | join(',') }}",
+			context:  map[string]interface{}{"array": []int{1, 2, 3}},
+			expected: "1,2,3",
+		},
+		{
+			name:     "List filter on variable",
+			template: "{{ items | list | join(',') }}",
+			context:  map[string]interface{}{"items": []int{1, 2, 3}},
+			expected: "1,2,3",
+		},
+		{
+			name:     "List filter on number",
+			template: "{{ 123 | list | join(',') }}",
+			context:  map[string]interface{}{},
+			expected: "123",
+		},
+		{
+			name:     "List filter on nil",
+			template: "{{ nil_var | list | join(',') }}",
+			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if err != nil {
+				t.Fatalf("TemplateString error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestEscapeFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "Escape HTML tags",
+			template: "{{ '<div>Hello</div>' | escape }}",
+			context:  map[string]interface{}{},
+			expected: "&lt;div&gt;Hello&lt;/div&gt;",
+		},
+		{
+			name:     "Escape ampersand",
+			template: "{{ 'Tom & Jerry' | escape }}",
+			context:  map[string]interface{}{},
+			expected: "Tom &amp; Jerry",
+		},
+		{
+			name:     "Escape quotes",
+			template: "{{ 'Say \"Hello\"' | escape }}",
+			context:  map[string]interface{}{},
+			expected: "Say &#34;Hello&#34;",
+		},
+		{
+			name:     "Escape variable containing HTML",
+			template: "{{ html_content | escape }}",
+			context:  map[string]interface{}{"html_content": "<script>alert('XSS')</script>"},
+			expected: "&lt;script&gt;alert(&#39;XSS&#39;)&lt;/script&gt;",
+		},
+		{
+			name:     "Escape nil",
+			template: "{{ nil_var | escape }}",
+			context:  map[string]interface{}{"nil_var": nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := TemplateString(tt.template, tt.context)
+			if err != nil {
+				t.Fatalf("TemplateString error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}

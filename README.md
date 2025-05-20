@@ -38,6 +38,12 @@ Additionally, the library will support:
     - Support for complex expressions such as `a * (b + c) / d`
   - Complex nested expression handling with multiple subscript operations
   - Basic filters (e.g., `{{ var | default('fallback') }}`)
+  - `upper` filter
+  - `lower` filter
+  - `capitalize` filter
+  - `replace` filter
+  - `trim` filter
+  - `list` filter
 
 - **Operators**
   - Arithmetic operators (`+`, `-`, `*`, `/`, `//` (floor division), `%` (modulo), `**` (power))
@@ -51,6 +57,13 @@ Additionally, the library will support:
 - **Filters**
   - `default` filter
   - `join` filter
+  - `upper` filter
+  - `lower` filter
+  - `capitalize` filter
+  - `replace` filter
+  - `trim` filter
+  - `list` filter
+  - `escape` filter
 
 ### Planned Features
 

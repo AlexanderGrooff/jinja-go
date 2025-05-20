@@ -676,3 +676,108 @@ func BenchmarkJoinFilter(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkUpperFilter(b *testing.B) {
+	context := map[string]interface{}{
+		"text": "hello world",
+	}
+	template := "{{ text | upper }}"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := TemplateString(template, context)
+		if err != nil {
+			b.Fatalf("TemplateString error: %v", err)
+		}
+	}
+}
+
+func BenchmarkLowerFilter(b *testing.B) {
+	context := map[string]interface{}{
+		"text": "HELLO WORLD",
+	}
+	template := "{{ text | lower }}"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := TemplateString(template, context)
+		if err != nil {
+			b.Fatalf("TemplateString error: %v", err)
+		}
+	}
+}
+
+func BenchmarkCapitalizeFilter(b *testing.B) {
+	context := map[string]interface{}{
+		"text": "hello world",
+	}
+	template := "{{ text | capitalize }}"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := TemplateString(template, context)
+		if err != nil {
+			b.Fatalf("TemplateString error: %v", err)
+		}
+	}
+}
+
+func BenchmarkReplaceFilter(b *testing.B) {
+	context := map[string]interface{}{
+		"text": "hello world hello",
+	}
+	template := "{{ text | replace('hello', 'hi') }}"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := TemplateString(template, context)
+		if err != nil {
+			b.Fatalf("TemplateString error: %v", err)
+		}
+	}
+}
+
+func BenchmarkTrimFilter(b *testing.B) {
+	context := map[string]interface{}{
+		"text": "  hello world  ",
+	}
+	template := "{{ text | trim }}"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := TemplateString(template, context)
+		if err != nil {
+			b.Fatalf("TemplateString error: %v", err)
+		}
+	}
+}
+
+func BenchmarkListFilter(b *testing.B) {
+	context := map[string]interface{}{
+		"text": "hello",
+	}
+	expression := "text | list"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := EvaluateExpression(expression, context)
+		if err != nil {
+			b.Fatalf("EvaluateExpression error: %v", err)
+		}
+	}
+}
+
+func BenchmarkEscapeFilter(b *testing.B) {
+	context := map[string]interface{}{
+		"html": "<div>Hello & World</div>",
+	}
+	template := "{{ html | escape }}"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := TemplateString(template, context)
+		if err != nil {
+			b.Fatalf("TemplateString error: %v", err)
+		}
+	}
+}
