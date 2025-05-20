@@ -12,14 +12,14 @@ echo "Comparing benchmark performance: $CURRENT_BRANCH vs $COMPARE_BRANCH"
 
 # Save current branch benchmarks
 echo "Running benchmarks on current branch ($CURRENT_BRANCH)..."
-go test ./pkg/ansiblejinja -bench=. -benchmem -count=5 > benchstat/current.txt
+go test ./ -bench=. -benchmem -count=5 > benchstat/current.txt
 
 # Switch to compare branch and run benchmarks
 echo "Switching to $COMPARE_BRANCH branch..."
 git stash -q || true
 git checkout $COMPARE_BRANCH
 echo "Running benchmarks on $COMPARE_BRANCH branch..."
-go test ./pkg/ansiblejinja -bench=. -benchmem -count=5 > benchstat/compare.txt
+go test ./ -bench=. -benchmem -count=5 > benchstat/compare.txt
 
 # Switch back to original branch
 echo "Switching back to $CURRENT_BRANCH branch..."

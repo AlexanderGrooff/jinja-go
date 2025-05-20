@@ -3,9 +3,10 @@ repos:
     hooks:
     -   id: go-fmt
         name: go fmt
-        entry: go fmt
+        entry: go fmt ./...
         language: system
         types: [go]
+        pass_filenames: false
     -   id: go-test
         name: go test
         entry: make test

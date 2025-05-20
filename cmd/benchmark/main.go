@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/AlexanderGrooff/ansible-jinja-go/pkg/ansiblejinja"
+	"github.com/AlexanderGrooff/ansible-jinja-go"
 )
 
 type BenchmarkCase struct {
