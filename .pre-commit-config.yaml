@@ -7,12 +7,15 @@ repos:
         language: system
         types: [go]
         pass_filenames: false
+        fail_fast: true
     -   id: go-test
         name: go test
         entry: make test
         language: system
         types: [go]
         pass_filenames: false
+        fail_fast: true
+    
     -   id: go-benchmark
         name: go benchmark
         description: Run benchmarks and save results

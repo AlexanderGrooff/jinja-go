@@ -168,6 +168,7 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
   - `escape` filter
   - `map` filter
   - `items` filter
+  - `lookup` filter with `file` and `env` sources
 
 ### Planned Features
 
@@ -195,7 +196,7 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
 
 - **Filters and Functions**
   - Additional common Ansible Jinja filters (`urlencode`, etc.)
-  - Lookup plugin support
+  - Additional lookup plugin types for the `lookup` filter
   - More built-in functions
   - Complete set of built-in tests (`defined`, `none`, `iterable`, etc.)
   - Translation/internationalization support (gettext)

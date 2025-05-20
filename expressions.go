@@ -306,7 +306,7 @@ func (l *Lexer) tokenizeIdentifierOrKeyword() {
 	// Check if it's a keyword operator
 	if _, found := operators[word]; found {
 		l.tokens = append(l.tokens, Token{Type: TokenOperator, Value: word, Position: start})
-	} else if word == "True" || word == "False" || word == "None" {
+	} else if word == "True" || word == "False" || word == "None" || word == "true" || word == "false" || word == "none" {
 		// Handle boolean literals and None
 		l.tokens = append(l.tokens, Token{Type: TokenLiteral, Value: word, Position: start})
 	} else {
@@ -467,6 +467,12 @@ func (p *ExprParser) parseLiteral(token Token) (*ExprNode, error) {
 	} else if token.Value == "False" {
 		value = false
 	} else if token.Value == "None" {
+		value = nil
+	} else if token.Value == "true" {
+		value = true
+	} else if token.Value == "false" {
+		value = false
+	} else if token.Value == "none" {
 		value = nil
 	} else {
 		// Try to parse as number
@@ -693,7 +699,24 @@ type Evaluator struct {
 
 // NewEvaluator creates a new evaluator with a context
 func NewEvaluator(context map[string]interface{}) *Evaluator {
-	return &Evaluator{context: context}
+	// Create a new context map that includes the original context values
+	// and adds any global functions
+	mergedContext := make(map[string]interface{})
+
+	// Copy all values from the original context
+	for k, v := range context {
+		mergedContext[k] = v
+	}
+
+	// Add global functions to the context
+	for name, fn := range GlobalFunctions {
+		// Don't override existing context values
+		if _, exists := mergedContext[name]; !exists {
+			mergedContext[name] = fn
+		}
+	}
+
+	return &Evaluator{context: mergedContext}
 }
 
 // Evaluate evaluates an AST node with context
@@ -868,39 +891,7 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 		return getSubscriptValue(obj, key)
 
 	case NodeFunctionCall:
-		if len(node.Children) < 1 {
-			return nil, fmt.Errorf("function call requires a callable")
-		}
-
-		callable, err := e.Evaluate(node.Children[0])
-		if err != nil {
-			return nil, err
-		}
-
-		// Evaluate arguments
-		var args []interface{}
-		for i := 1; i < len(node.Children); i++ {
-			arg, err := e.Evaluate(node.Children[i])
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, arg)
-		}
-
-		// Special case for filters when the callable is a string identifier
-		if identifier, ok := node.Children[0].Value.(string); ok && node.Children[0].Type == NodeIdentifier {
-			// Check if it's a filter function
-			if identifier == "default" && len(args) > 0 {
-				// Apply default filter directly
-				// If callable/first argument is nil or falsy, return the first default arg
-				if callable == nil || !isTruthy(callable) {
-					return args[0], nil
-				}
-				return callable, nil
-			}
-		}
-
-		return callFunction(callable, args)
+		return e.evaluateFunctionCall(node)
 
 	case NodeList:
 		// Evaluate each item in the list
@@ -942,6 +933,56 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("unknown node type: %v", node.Type)
 	}
+}
+
+// Evaluate the function call node
+func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
+	if node.Type != NodeFunctionCall {
+		return nil, fmt.Errorf("expected function call node, got %v", node.Type)
+	}
+
+	// First child is the function name
+	if len(node.Children) < 1 {
+		return nil, fmt.Errorf("function call node missing function identifier")
+	}
+
+	// Evaluate the function name (first child)
+	funcNode := node.Children[0]
+	if funcNode.Type != NodeIdentifier {
+		return nil, fmt.Errorf("expected function name to be an identifier, got %v", funcNode.Type)
+	}
+
+	funcName := funcNode.Identifier
+
+	// Check if the function exists in the context
+	funcValue, exists := e.context[funcName]
+	if !exists {
+		return nil, fmt.Errorf("function '%s' is not defined", funcName)
+	}
+
+	// Check if it's actually a function
+	funcTyped, ok := funcValue.(FunctionFunc)
+	if !ok {
+		return nil, fmt.Errorf("'%s' is not a callable function", funcName)
+	}
+
+	// Evaluate all arguments
+	args := make([]interface{}, 0, len(node.Children)-1)
+	for i := 1; i < len(node.Children); i++ {
+		argValue, err := e.Evaluate(node.Children[i])
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating argument %d for function '%s': %v", i, funcName, err)
+		}
+		args = append(args, argValue)
+	}
+
+	// Call the function with the arguments
+	result, err := funcTyped(args...)
+	if err != nil {
+		return nil, fmt.Errorf("error calling function '%s': %v", funcName, err)
+	}
+
+	return result, nil
 }
 
 // ParseAndEvaluate parses and evaluates an expression string with context

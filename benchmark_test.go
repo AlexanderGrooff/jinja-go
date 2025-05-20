@@ -2,6 +2,7 @@ package ansiblejinja
 
 import (
 	"fmt"
+	"os"
 	"testing"
 )
 
@@ -461,6 +462,22 @@ func BenchmarkNestedDictionaryTemplates(b *testing.B) {
 		"db_port":              5432,
 		"db_settings_timeout":  30,
 		"db_settings_max_conn": 100,
+		"users": []interface{}{
+			map[string]interface{}{
+				"username": "user",
+				"email":    "user@example.com",
+				"permissions": map[string]interface{}{
+					"roles": []string{"user"},
+				},
+			},
+			map[string]interface{}{
+				"username": "admin",
+				"email":    "admin@example.com",
+				"permissions": map[string]interface{}{
+					"roles": []string{"admin"},
+				},
+			},
+		},
 	}
 
 	tests := []struct {
@@ -878,4 +895,75 @@ func BenchmarkItemsFilter(b *testing.B) {
 			}
 		})
 	}
+}
+
+func BenchmarkLookupFilter(b *testing.B) {
+	// Create a test file with some content
+	testFilePath := "lookup_bench_test.txt"
+	testFileContent := "This is a test file for lookup filter benchmark"
+	err := os.WriteFile(testFilePath, []byte(testFileContent), 0644)
+	if err != nil {
+		b.Fatalf("Failed to create test file: %v", err)
+	}
+	defer os.Remove(testFilePath) // Clean up after test
+
+	// Set an environment variable for testing
+	testEnvVar := "LOOKUP_BENCH_ENV_VAR"
+	testEnvValue := "benchmark_env_value"
+	os.Setenv(testEnvVar, testEnvValue)
+	defer os.Unsetenv(testEnvVar) // Clean up after test
+
+	testCases := []struct {
+		name  string
+		input interface{}
+		args  []interface{}
+	}{
+		{
+			name:  "lookup_file",
+			input: "file",
+			args:  []interface{}{testFilePath},
+		},
+		{
+			name:  "lookup_env",
+			input: "env",
+			args:  []interface{}{testEnvVar},
+		},
+	}
+
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := lookupFilter(tc.input, tc.args...)
+				if err != nil {
+					b.Fatalf("Error in lookupFilter: %v", err)
+				}
+			}
+		})
+	}
+
+	// Also benchmark through template execution
+	b.Run("template_with_file_lookup", func(b *testing.B) {
+		template := fmt.Sprintf("{{ lookup('file', '%s') }}", testFilePath)
+		context := map[string]interface{}{}
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := TemplateString(template, context)
+			if err != nil {
+				b.Fatalf("Error in TemplateString: %v", err)
+			}
+		}
+	})
+
+	b.Run("template_with_env_lookup", func(b *testing.B) {
+		template := fmt.Sprintf("{{ lookup('env', '%s') }}", testEnvVar)
+		context := map[string]interface{}{}
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := TemplateString(template, context)
+			if err != nil {
+				b.Fatalf("Error in TemplateString: %v", err)
+			}
+		}
+	})
 }

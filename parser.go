@@ -178,6 +178,7 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 			// However, `default` specifically makes it "not undefined" for strict checks.
 		}
 	}
+
 	return currentValue, initialLookupFailed && currentValueIsEffectivelyUndefined, nil
 }
 

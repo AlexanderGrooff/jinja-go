@@ -3,6 +3,7 @@ package ansiblejinja
 import (
 	"fmt"
 	"html"
+	"os"
 	"reflect"
 	"strings"
 )
@@ -361,6 +362,69 @@ func itemsFilter(input interface{}, args ...interface{}) (interface{}, error) {
 	return result, nil
 }
 
+// lookupFilter implements the 'lookup' Ansible filter.
+// It retrieves data from external sources based on lookup type.
+// Usage: {{ lookup('file', '/path/to/file') }}
+// Usage: {{ lookup('env', 'HOME') }}
+func lookupFilter(input interface{}, args ...interface{}) (interface{}, error) {
+	// For the lookup filter, the input is actually the first argument (lookup type)
+	// and the remaining args are passed to the specific lookup function
+	if input == nil {
+		return nil, fmt.Errorf("lookup filter requires a lookup type as input")
+	}
+
+	// Convert input to string
+	lookupType, ok := input.(string)
+	if !ok {
+		return nil, fmt.Errorf("lookup filter requires a string as lookup type, got %T", input)
+	}
+
+	switch lookupType {
+	case "file":
+		if len(args) < 1 {
+			return nil, fmt.Errorf("file lookup requires a file path argument")
+		}
+		filePath, ok := args[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("file lookup requires a string as file path, got %T", args[0])
+		}
+
+		// Read the file content
+		content, err := readFileContent(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("error reading file '%s': %v", filePath, err)
+		}
+		return content, nil
+
+	case "env":
+		if len(args) < 1 {
+			return nil, fmt.Errorf("env lookup requires an environment variable name")
+		}
+		envVar, ok := args[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("env lookup requires a string as environment variable name, got %T", args[0])
+		}
+
+		// Get the environment variable
+		value := os.Getenv(envVar)
+		return value, nil
+
+	// Add more lookup types as needed
+
+	default:
+		return nil, fmt.Errorf("unsupported lookup type: %s", lookupType)
+	}
+}
+
+// Helper function to read file content
+func readFileContent(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
 func init() {
 	// Initialize GlobalFilters after all filter functions are defined
 	GlobalFilters = map[string]FilterFunc{
@@ -375,5 +439,6 @@ func init() {
 		"escape":     escapeFilter,
 		"map":        mapFilter,
 		"items":      itemsFilter,
+		"lookup":     lookupFilter,
 	}
 }

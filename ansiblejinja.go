@@ -42,26 +42,56 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 			result.WriteString(node.Content)
 			currentIndex++
 		case NodeExpression:
-			evalResult, wasUndefined, evalErr := evaluateFullExpressionInternal(node.Content, context)
-			if evalErr != nil {
-				if strings.Contains(evalErr.Error(), "nested {{ or }} found") || strings.Contains(evalErr.Error(), "unclosed expression tag") {
-					return "", fmt.Errorf("error processing template expression: %w", evalErr)
-				}
-				if wasUndefined && evalResult == nil {
-					// Append nothing for undefined variables not handled by a filter (like default)
-				} else if evalErr != nil && !wasUndefined {
-					return "", fmt.Errorf("error evaluating expression '%s': %v", node.Content, evalErr)
+			trimmedExpr := strings.TrimSpace(node.Content)
+
+			// First try to handle special functions that require different evaluation
+			if strings.HasPrefix(trimmedExpr, "lookup(") || strings.Contains(trimmedExpr, " lookup(") {
+				// Handle lookup function specially
+				val, err := ParseAndEvaluate(trimmedExpr, context)
+				if err == nil {
+					// Success! Convert the result to string and add to output
+					switch v := val.(type) {
+					case string:
+						result.WriteString(v)
+					case nil:
+						// nil values render as empty strings
+						// Do nothing, no output
+					default:
+						// For all other types, use fmt.Sprintf to get a string representation
+						result.WriteString(fmt.Sprintf("%v", v))
+					}
+					currentIndex++
+					continue
 				} else {
-					result.WriteString(fmt.Sprintf("%v", evalResult))
-				}
-			} else {
-				if evalResult == nil && wasUndefined {
-					// append nothing
-				} else {
-					result.WriteString(fmt.Sprintf("%v", evalResult))
+					// For lookup errors, return a more specific error
+					return "", fmt.Errorf("error in lookup function: %v", err)
 				}
 			}
+
+			// For normal expressions, use the filter pipeline
+			val, wasUndefined, err := evaluateFullExpressionInternal(node.Content, context)
+			if err != nil {
+				return "", fmt.Errorf("error evaluating expression '{{ %s }}': %v", node.Content, err)
+			}
+
+			if wasUndefined && val == nil {
+				// Jinja2 renders undefined variables as empty strings
+				currentIndex++
+				continue
+			}
+
+			switch v := val.(type) {
+			case string:
+				result.WriteString(v)
+			case nil:
+				// nil values render as empty strings
+				// Do nothing, no output
+			default:
+				// For all other types, use fmt.Sprintf to get a string representation
+				result.WriteString(fmt.Sprintf("%v", v))
+			}
 			currentIndex++
+
 		case NodeComment:
 			// Comments are ignored
 			currentIndex++

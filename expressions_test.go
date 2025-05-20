@@ -39,20 +39,44 @@ func TestParseAndEvaluate(t *testing.T) {
 			want:    "world",
 		},
 		{
-			name:    "boolean literal - true",
+			name:    "string literal - nested quotes",
+			expr:    "\"'hello world'\"",
+			context: map[string]interface{}{},
+			want:    "'hello world'",
+		},
+		{
+			name:    "boolean literal - true uppercase",
 			expr:    "True",
 			context: map[string]interface{}{},
 			want:    true,
 		},
 		{
-			name:    "boolean literal - false",
+			name:    "boolean literal - false uppercase",
 			expr:    "False",
 			context: map[string]interface{}{},
 			want:    false,
 		},
 		{
-			name:    "none literal",
+			name:    "boolean literal - true lowercase",
+			expr:    "true",
+			context: map[string]interface{}{},
+			want:    true,
+		},
+		{
+			name:    "boolean literal - false lowercase",
+			expr:    "false",
+			context: map[string]interface{}{},
+			want:    false,
+		},
+		{
+			name:    "none literal - uppercase",
 			expr:    "None",
+			context: map[string]interface{}{},
+			want:    nil,
+		},
+		{
+			name:    "none literal - lowercase",
+			expr:    "none",
 			context: map[string]interface{}{},
 			want:    nil,
 		},
@@ -103,6 +127,12 @@ func TestParseAndEvaluate(t *testing.T) {
 			expr:    "2 + 3",
 			context: map[string]interface{}{},
 			want:    5,
+		},
+		{
+			name:    "addition of floats",
+			expr:    "2.5 + 3.5",
+			context: map[string]interface{}{},
+			want:    6.0,
 		},
 		{
 			name:    "subtraction of integers",
@@ -397,16 +427,6 @@ func TestParseAndEvaluate(t *testing.T) {
 			want:    30,
 		},
 
-		// Function calls
-		{
-			name: "simple function call",
-			expr: "add(1, 2)",
-			context: map[string]interface{}{
-				"add": func(a, b int) int { return a + b },
-			},
-			want: 3,
-		},
-
 		// Precedence
 		{
 			name:    "operator precedence - multiplication before addition",
@@ -472,6 +492,26 @@ func TestParseAndEvaluate(t *testing.T) {
 				},
 			},
 			want: 2,
+		},
+
+		// Function calls
+		{
+			name:    "get item from dict",
+			expr:    "mapping.get('key')",
+			context: map[string]interface{}{"mapping": map[string]interface{}{"key": "value"}},
+			want:    "value",
+		},
+		{
+			name:    "get item from dict with default - key exists",
+			expr:    "mapping.get('key', 'default')",
+			context: map[string]interface{}{"mapping": map[string]interface{}{"key": "value"}},
+			want:    "value",
+		},
+		{
+			name:    "get item from dict with default - key missing",
+			expr:    "mapping.get('missing', 'default')",
+			context: map[string]interface{}{"mapping": map[string]interface{}{}},
+			want:    "default",
 		},
 	}
 

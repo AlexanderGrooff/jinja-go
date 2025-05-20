@@ -1,6 +1,7 @@
 package ansiblejinja
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -1843,6 +1844,204 @@ func TestTemplateStringWithItemsFilter(t *testing.T) {
 				}
 			} else if !tt.wantErr && got != tt.want {
 				t.Errorf("TemplateString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLookupFilter(t *testing.T) {
+	// Create a test file with some content
+	testFilePath := "test_lookup_file.txt"
+	testFileContent := "This is a test file for lookup filter"
+	err := os.WriteFile(testFilePath, []byte(testFileContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	defer os.Remove(testFilePath) // Clean up after test
+
+	// Set an environment variable for testing
+	testEnvVar := "TEST_LOOKUP_ENV_VAR"
+	testEnvValue := "test_env_value"
+	os.Setenv(testEnvVar, testEnvValue)
+	defer os.Unsetenv(testEnvVar) // Clean up after test
+
+	tests := []struct {
+		name    string
+		input   interface{}
+		args    []interface{}
+		want    interface{}
+		wantErr bool
+	}{
+		{
+			name:    "lookup file",
+			input:   "file",
+			args:    []interface{}{testFilePath},
+			want:    testFileContent,
+			wantErr: false,
+		},
+		{
+			name:    "lookup env",
+			input:   "env",
+			args:    []interface{}{testEnvVar},
+			want:    testEnvValue,
+			wantErr: false,
+		},
+		{
+			name:    "lookup with nil input",
+			input:   nil,
+			args:    []interface{}{},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "lookup file with non-string path",
+			input:   "file",
+			args:    []interface{}{123},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "lookup env with non-string var name",
+			input:   "env",
+			args:    []interface{}{true},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "lookup with non-string type",
+			input:   123,
+			args:    []interface{}{},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "lookup file with no arguments",
+			input:   "file",
+			args:    []interface{}{},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "lookup env with no arguments",
+			input:   "env",
+			args:    []interface{}{},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "lookup with unsupported type",
+			input:   "unsupported",
+			args:    []interface{}{"arg"},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "lookup file with non-existent file",
+			input:   "file",
+			args:    []interface{}{"non_existent_file.txt"},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := lookupFilter(tt.input, tt.args...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("lookupFilter() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("lookupFilter() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTemplateStringWithLookupFilter(t *testing.T) {
+	// Create a test file with some content
+	testFilePath := "test_template_lookup_file.txt"
+	testFileContent := "This is a test file content"
+	err := os.WriteFile(testFilePath, []byte(testFileContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	defer os.Remove(testFilePath) // Clean up after test
+
+	// Set an environment variable for testing
+	testEnvVar := "TEST_TEMPLATE_LOOKUP_ENV_VAR"
+	testEnvValue := "test_template_env_value"
+	os.Setenv(testEnvVar, testEnvValue)
+	defer os.Unsetenv(testEnvVar) // Clean up after test
+
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "template with lookup file filter",
+			template: "File content: {{ lookup('file', '" + testFilePath + "') }}",
+			context:  map[string]interface{}{},
+			want:     "File content: " + testFileContent,
+			wantErr:  false,
+		},
+		{
+			name:     "template with lookup env filter",
+			template: "Environment variable value: {{ lookup('env', '" + testEnvVar + "') }}",
+			context:  map[string]interface{}{},
+			want:     "Environment variable value: " + testEnvValue,
+			wantErr:  false,
+		},
+		{
+			name:     "template with lookup file filter with literal path",
+			template: "File content: {{ lookup('file', file_path) }}",
+			context:  map[string]interface{}{"file_path": testFilePath},
+			want:     "File content: " + testFileContent,
+			wantErr:  false,
+		},
+		{
+			name:     "template with lookup env filter with literal name",
+			template: "Environment variable value: {{ lookup('env', env_var) }}",
+			context:  map[string]interface{}{"env_var": testEnvVar},
+			want:     "Environment variable value: " + testEnvValue,
+			wantErr:  false,
+		},
+		{
+			name:     "template with lookup unsupported type",
+			template: "{{ lookup('unsupported', 'anything') }}",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
+		{
+			name:     "template with lookup non-existent file",
+			template: "{{ lookup('file', 'non_existent_file.txt') }}",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := TemplateString(tt.template, tt.context)
+
+			// Debug output
+			t.Logf("Template: %s", tt.template)
+			t.Logf("Got: %#v", got)
+			t.Logf("Error: %v", err)
+			t.Logf("Want: %#v", tt.want)
+			t.Logf("WantErr: %v", tt.wantErr)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TemplateString() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("TemplateString() = %v, want %v", got, tt.want)
 			}
 		})
 	}
