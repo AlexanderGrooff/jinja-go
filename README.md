@@ -14,96 +14,6 @@ Additionally, the library will support:
 -   Built-in functions and filters comparable to those in Ansible's Jinja (e.g., `lookup`, `urlencode`, `map`, `default`).
 -   Basic flow control structures (e.g., `{% for item in items %}`, `{% if condition %}`).
 
-## Implementation Status
-
-### Already Implemented Features
-
-- **Template Syntax**
-  - Basic variable substitution (`{{ variable }}`)
-  - Comments (`{# comment #}`)
-  - Conditional statements (`{% if %}`, `{% elif %}`, `{% else %}`, `{% endif %}`)
-  - Loop structures (`{% for item in items %}`, `{% endfor %}`) with loop variable support
-
-- **Expression Evaluation**
-  - Basic literals (integers, floats, strings, booleans, null/None)
-  - Variable access and context lookup
-  - Pythonic data types:
-    - Lists (`[1, 2, 3]`)
-    - Dictionaries (`{'key': 'value'}`)
-  - Object/attribute access (`object.attribute`)
-  - Subscript access (`array[index]`, `dict['key']`, negative indices)
-  - LALR (Look-Ahead LR) parser for robust expression evaluation
-    - Improved parsing performance and reliability
-    - Proper operator precedence handling
-    - Support for complex expressions such as `a * (b + c) / d`
-  - Complex nested expression handling with multiple subscript operations
-  - Basic filters (e.g., `{{ var | default('fallback') }}`)
-
-- **Operators**
-  - Arithmetic operators (`+`, `-`, `*`, `/`, `//` (floor division), `%` (modulo), `**` (power))
-  - Unary operators (`not`, `-`, `+`)
-  - Comparison operators (`==`, `!=`, `>`, `<`, `>=`, `<=`)
-  - Logical operators (`and`, `or`) with short-circuit evaluation
-  - Identity operators (`is`, `is not`)
-  - Membership operators (`in`)
-  - String operations (concatenation, repetition)
-
-- **Filters**
-  - `default` filter
-  - `join` filter
-  - `upper` filter
-  - `lower` filter
-  - `capitalize` filter
-  - `replace` filter
-  - `trim` filter
-  - `list` filter
-  - `escape` filter
-
-### Planned Features
-
-- **Template Syntax**
-  - Include support (`{% include 'page.html' %}`)
-  - Macro definitions (`{% macro %}`/`{% endmacro %}`)
-  - Block and extends for template inheritance (`{% block %}`, `{% extends %}`)
-  - Set statements (`{% set %}`)
-  - With blocks (`{% with %}`)
-  - Loop controls (`{% break %}`, `{% continue %}`)
-  - Whitespace control (using `-` in tags like `{%-` and `-%}`)
-  - Expression statements (`{% do expression %}`)
-  - Debug statements (`{% debug %}`)
-
-- **Expression Evaluation**
-  - More filters (e.g., `{{ url | urlencode }}`)
-  - Tests (`{{ user is defined }}`, `{{ user is not none }}`)
-  - String formatting and f-strings
-  - List comprehensions
-  - Generator expressions (iterables)
-  - Auto-escaping support
-
-- **Control Structures**
-  - More complex control structures
-
-- **Filters and Functions**
-  - Additional common Ansible Jinja filters (`map`, `urlencode`, etc.)
-  - Lookup plugin support
-  - More built-in functions
-  - Complete set of built-in tests (`defined`, `none`, `iterable`, etc.)
-  - Translation/internationalization support (gettext)
-
-- **Advanced Features**
-  - Macro definitions
-  - Include/import functionality
-  - Block/extends for template inheritance
-  - Context scoping and namespaces
-  - Custom tests and filters
-  - Auto-escaping configuration
-
-### Broader improvements to be made
-
-1. Error handling improvements - standardize error reporting across modules
-1. Handling of edge cases in string literals and escaping
-1. Better documentation of supported features
-
 ## Usage
 
 ```go
@@ -211,6 +121,96 @@ The comparison provides insight into performance characteristics of both impleme
 - Tracking performance improvements over time
 
 You can view the [latest comparison report](benchstat/cross/comparison_report.txt) to see the current performance difference between the Go and Python implementations.
+
+## Implementation Status
+
+### Already Implemented Features
+
+- **Template Syntax**
+  - Basic variable substitution (`{{ variable }}`)
+  - Comments (`{# comment #}`)
+  - Conditional statements (`{% if %}`, `{% elif %}`, `{% else %}`, `{% endif %}`)
+  - Loop structures (`{% for item in items %}`, `{% endfor %}`) with loop variable support
+
+- **Expression Evaluation**
+  - Basic literals (integers, floats, strings, booleans, null/None)
+  - Variable access and context lookup
+  - Pythonic data types:
+    - Lists (`[1, 2, 3]`)
+    - Dictionaries (`{'key': 'value'}`)
+  - Object/attribute access (`object.attribute`)
+  - Subscript access (`array[index]`, `dict['key']`, negative indices)
+  - LALR (Look-Ahead LR) parser for robust expression evaluation
+    - Improved parsing performance and reliability
+    - Proper operator precedence handling
+    - Support for complex expressions such as `a * (b + c) / d`
+  - Complex nested expression handling with multiple subscript operations
+  - Basic filters (e.g., `{{ var | default('fallback') }}`)
+
+- **Operators**
+  - Arithmetic operators (`+`, `-`, `*`, `/`, `//` (floor division), `%` (modulo), `**` (power))
+  - Unary operators (`not`, `-`, `+`)
+  - Comparison operators (`==`, `!=`, `>`, `<`, `>=`, `<=`)
+  - Logical operators (`and`, `or`) with short-circuit evaluation
+  - Identity operators (`is`, `is not`)
+  - Membership operators (`in`)
+  - String operations (concatenation, repetition)
+
+- **Filters**
+  - `default` filter
+  - `join` filter
+  - `upper` filter
+  - `lower` filter
+  - `capitalize` filter
+  - `replace` filter
+  - `trim` filter
+  - `list` filter
+  - `escape` filter
+
+### Planned Features
+
+- **Template Syntax**
+  - Include support (`{% include 'page.html' %}`)
+  - Macro definitions (`{% macro %}`/`{% endmacro %}`)
+  - Block and extends for template inheritance (`{% block %}`, `{% extends %}`)
+  - Set statements (`{% set %}`)
+  - With blocks (`{% with %}`)
+  - Loop controls (`{% break %}`, `{% continue %}`)
+  - Whitespace control (using `-` in tags like `{%-` and `-%}`)
+  - Expression statements (`{% do expression %}`)
+  - Debug statements (`{% debug %}`)
+
+- **Expression Evaluation**
+  - More filters (e.g., `{{ url | urlencode }}`)
+  - Tests (`{{ user is defined }}`, `{{ user is not none }}`)
+  - String formatting and f-strings
+  - List comprehensions
+  - Generator expressions (iterables)
+  - Auto-escaping support
+
+- **Control Structures**
+  - More complex control structures
+
+- **Filters and Functions**
+  - Additional common Ansible Jinja filters (`map`, `urlencode`, etc.)
+  - Lookup plugin support
+  - More built-in functions
+  - Complete set of built-in tests (`defined`, `none`, `iterable`, etc.)
+  - Translation/internationalization support (gettext)
+
+- **Advanced Features**
+  - Macro definitions
+  - Include/import functionality
+  - Block/extends for template inheritance
+  - Context scoping and namespaces
+  - Custom tests and filters
+  - Auto-escaping configuration
+
+### Broader improvements to be made
+
+1. Error handling improvements - standardize error reporting across modules
+1. Handling of edge cases in string literals and escaping
+1. Better documentation of supported features
 
 ### Pre-commit Hooks
 
