@@ -2046,3 +2046,88 @@ func TestTemplateStringWithLookupFilter(t *testing.T) {
 		})
 	}
 }
+
+func TestStringFormatMethod(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "pre-formatted string in context",
+			template: "{{ formatted_string }}",
+			context: map[string]interface{}{
+				"format_string": "Hello, {}!",
+				"formatted_string": func() string {
+					result, _ := stringFormatMethod("Hello, {}!", "world")
+					return result.(string)
+				}(),
+			},
+			want:    "Hello, world!",
+			wantErr: false,
+		},
+		{
+			name:     "pre-formatted string with multiple args",
+			template: "{{ formatted_string }}",
+			context: map[string]interface{}{
+				"formatted_string": func() string {
+					result, _ := stringFormatMethod("{} {} {}", "a", "b", "c")
+					return result.(string)
+				}(),
+			},
+			want:    "a b c",
+			wantErr: false,
+		},
+		{
+			name:     "pre-formatted string with indexed args",
+			template: "{{ formatted_string }}",
+			context: map[string]interface{}{
+				"formatted_string": func() string {
+					result, _ := stringFormatMethod("{0}, {1}, {2}", "a", "b", "c")
+					return result.(string)
+				}(),
+			},
+			want:    "a, b, c",
+			wantErr: false,
+		},
+		{
+			name:     "pre-formatted string with non-sequential indexed args",
+			template: "{{ formatted_string }}",
+			context: map[string]interface{}{
+				"formatted_string": func() string {
+					result, _ := stringFormatMethod("{2}, {0}, {1}", "a", "b", "c")
+					return result.(string)
+				}(),
+			},
+			want:    "c, a, b",
+			wantErr: false,
+		},
+		{
+			name:     "pre-formatted string with insufficient args",
+			template: "{{ formatted_string }}",
+			context: map[string]interface{}{
+				"formatted_string": func() string {
+					result, _ := stringFormatMethod("{} {} {}", "a", "b")
+					return result.(string)
+				}(),
+			},
+			want:    "a b {}",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := TemplateString(tt.template, tt.context)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TemplateString() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("TemplateString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

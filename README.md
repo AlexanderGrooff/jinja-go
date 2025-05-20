@@ -139,6 +139,7 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
     - Lists (`[1, 2, 3]`)
     - Dictionaries (`{'key': 'value'}`)
     - Dictionary methods like `.get()` (`dict.get('key', 'default')`)
+    - String methods like `.format()` (`"Hello, {}!".format("world")`)
   - Object/attribute access (`object.attribute`)
   - Subscript access (`array[index]`, `dict['key']`, negative indices)
   - LALR (Look-Ahead LR) parser for robust expression evaluation

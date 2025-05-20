@@ -513,6 +513,44 @@ func TestParseAndEvaluate(t *testing.T) {
 			context: map[string]interface{}{"mapping": map[string]interface{}{}},
 			want:    "default",
 		},
+
+		// Add string format tests to ParseAndEvaluate test cases
+		{
+			name:    "string format with positional args",
+			expr:    "'Hello, {}!'.format('world')",
+			context: map[string]interface{}{},
+			want:    "Hello, world!",
+		},
+		{
+			name:    "string format with multiple positional args",
+			expr:    "'{} {} {}'.format('a', 'b', 'c')",
+			context: map[string]interface{}{},
+			want:    "a b c",
+		},
+		{
+			name:    "string format with indexed args",
+			expr:    "'{0}, {1}, {2}'.format('a', 'b', 'c')",
+			context: map[string]interface{}{},
+			want:    "a, b, c",
+		},
+		{
+			name:    "string format with non-sequential indexed args",
+			expr:    "'{2}, {0}, {1}'.format('a', 'b', 'c')",
+			context: map[string]interface{}{},
+			want:    "c, a, b",
+		},
+		{
+			name:    "string format with variable value",
+			expr:    "'Hello, {}!'.format(name)",
+			context: map[string]interface{}{"name": "world"},
+			want:    "Hello, world!",
+		},
+		{
+			name:    "string format with mixed placeholder types",
+			expr:    "'{} {0}'.format('a')",
+			context: map[string]interface{}{},
+			want:    "a a",
+		},
 	}
 
 	for _, tt := range tests {

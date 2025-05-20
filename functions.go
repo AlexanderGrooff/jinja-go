@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
+	"strconv"
 )
 
 // FunctionFunc defines the signature for a function callable from templates
@@ -27,6 +29,9 @@ func init() {
 
 	// Register methods for map type
 	registerMapMethods()
+
+	// Register methods for string type
+	registerStringMethods()
 }
 
 // lookupFunction implements the Ansible 'lookup' function
@@ -87,6 +92,18 @@ func registerMapMethods() {
 
 	// Add map methods to global methods
 	GlobalMethods["map"] = mapMethods
+}
+
+// registerStringMethods registers methods that can be called on string types
+func registerStringMethods() {
+	// Create methods map for string type
+	stringMethods := make(map[string]FunctionFunc)
+
+	// Register the format method
+	stringMethods["format"] = stringFormatMethod
+
+	// Add string methods to global methods
+	GlobalMethods["string"] = stringMethods
 }
 
 // mapGetMethod implements the dictionary get method:
@@ -176,4 +193,76 @@ func mapGetMethod(args ...interface{}) (interface{}, error) {
 
 		return nil, fmt.Errorf("get method requires a dictionary/map, got %T", dict)
 	}
+}
+
+// stringFormatMethod implements the string format method:
+// Usage: {{ "Hello, {}!".format("world") }} -> "Hello, world!"
+// Usage: {{ "Hello, {name}!".format(name="world") }} -> "Hello, world!"
+// Usage: {{ "{0}, {1}, {2}".format("a", "b", "c") }} -> "a, b, c"
+func stringFormatMethod(args ...interface{}) (interface{}, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("format method requires a string")
+	}
+
+	// First argument is the string itself
+	formatStr, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("format method requires a string, got %T", args[0])
+	}
+
+	// If no arguments provided other than the string itself, return the string unmodified
+	if len(args) == 1 {
+		return formatStr, nil
+	}
+
+	// All args after the format string itself are format arguments
+	formatArgs := args[1:]
+
+	// For auto-numbering - track the next positional arg to use
+	nextArg := 0
+
+	// Pattern to match format placeholders: {}, {0}, {name}, etc.
+	placeholderPattern := regexp.MustCompile(`{([^{}]*)}`)
+
+	// Replace placeholders with values
+	result := placeholderPattern.ReplaceAllStringFunc(formatStr, func(placeholder string) string {
+		// Extract the name/index inside braces, removing the braces
+		name := placeholder[1 : len(placeholder)-1]
+
+		// Empty placeholder {} - use the next positional argument
+		if name == "" {
+			if nextArg >= len(formatArgs) {
+				// Lacking a positional argument - return the original placeholder
+				return placeholder
+			}
+			// Use the next positional argument
+			arg := formatArgs[nextArg]
+			nextArg++ // Move to next arg for next auto-numbered placeholder
+			return fmt.Sprintf("%v", arg)
+		}
+
+		// Numeric placeholder {0}, {1}, etc. - use the indexed positional argument
+		if index, err := strconv.Atoi(name); err == nil {
+			if index >= 0 && index < len(formatArgs) {
+				return fmt.Sprintf("%v", formatArgs[index])
+			}
+			// Index out of range - return the original placeholder
+			return placeholder
+		}
+
+		// Named placeholder {name} - check if any arg is a map with this key
+		// This is a simplification as Jinja/Python would use keyword arguments
+		for _, arg := range formatArgs {
+			if m, ok := arg.(map[string]interface{}); ok {
+				if val, exists := m[name]; exists {
+					return fmt.Sprintf("%v", val)
+				}
+			}
+		}
+
+		// Cannot resolve the placeholder - return as is
+		return placeholder
+	})
+
+	return result, nil
 }
