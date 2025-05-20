@@ -435,55 +435,46 @@ func power(left, right interface{}) (interface{}, error) {
 // getAttributeValue gets an attribute from an object (obj.attr)
 func getAttributeValue(obj interface{}, attr string) (interface{}, error) {
 	if obj == nil {
-		return nil, fmt.Errorf("cannot access attribute '%s' of nil", attr)
+		return nil, fmt.Errorf("cannot get attribute '%s' of nil", attr)
 	}
 
-	// For maps, just look up the key
-	if m, ok := obj.(map[string]interface{}); ok {
-		if val, exists := m[attr]; exists {
+	// Check if object is a map[string]interface{}
+	if objMap, ok := obj.(map[string]interface{}); ok {
+		if val, exists := objMap[attr]; exists {
 			return val, nil
 		}
-		return nil, fmt.Errorf("attribute '%s' not found in map", attr)
+		return nil, fmt.Errorf("map has no attribute '%s'", attr)
 	}
 
-	// Use reflection for struct field access
-	v := reflect.ValueOf(obj)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+	// Use reflection to get the attribute value
+	objVal := reflect.ValueOf(obj)
+
+	// Check if it's a pointer and dereference if needed
+	if objVal.Kind() == reflect.Ptr {
+		objVal = objVal.Elem()
 	}
 
-	if v.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("cannot access attribute of non-struct, non-map type: %T", obj)
-	}
+	// For struct types, try to get the field
+	if objVal.Kind() == reflect.Struct {
+		// Get the field by name
+		field := objVal.FieldByName(attr)
+		if field.IsValid() {
+			return field.Interface(), nil
+		}
 
-	// First try to find a field with exactly matching name
-	field := v.FieldByName(attr)
-	if field.IsValid() {
-		return field.Interface(), nil
-	}
-
-	// Then try for a method with the given name
-	method := v.MethodByName(attr)
-	if method.IsValid() {
-		return method.Interface(), nil
-	}
-
-	// Try case-insensitive match for the field
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		if strings.EqualFold(t.Field(i).Name, attr) {
-			return v.Field(i).Interface(), nil
+		// Try method call if field not found
+		method := objVal.MethodByName(attr)
+		if method.IsValid() {
+			// Call the method with no arguments
+			results := method.Call(nil)
+			if len(results) == 0 {
+				return nil, nil
+			}
+			return results[0].Interface(), nil
 		}
 	}
 
-	// Try case-insensitive match for the method
-	for i := 0; i < t.NumMethod(); i++ {
-		if strings.EqualFold(t.Method(i).Name, attr) {
-			return v.Method(i).Interface(), nil
-		}
-	}
-
-	return nil, fmt.Errorf("attribute '%s' not found in %T", attr, obj)
+	return nil, fmt.Errorf("object of type %T has no attribute '%s'", obj, attr)
 }
 
 // getSubscriptValue gets a value by subscript access (obj[key])

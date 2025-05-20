@@ -497,12 +497,12 @@ func BenchmarkNestedDictionaryTemplates(b *testing.B) {
 			template: "Database settings: Host={{ db_host }}, Max Connections={{ db_settings_max_conn }}",
 			context:  nestedContext,
 		},
-		// Skip for loop test until supported
-		// {
-		//     name:     "for_loop_with_nested_access",
-		//     template: "Users:\n{% for user in users %}Username: {{ user.username }}\nEmail: {{ user.email }}\nRoles: {% for role in user.permissions.roles %}{{ role }}{% if not loop.last %}, {% endif %}{% endfor %}\n{% endfor %}",
-		//     context:  nestedContext,
-		// },
+		// For loop now supported
+		{
+			name:     "for_loop_with_nested_access",
+			template: "Users:\n{% for user in users %}Username: {{ user.username }}\nEmail: {{ user.email }}\nRoles: {% for role in user.permissions.roles %}{{ role }}{% if not loop.last %}, {% endif %}{% endfor %}\n{% endfor %}",
+			context:  nestedContext,
+		},
 		{
 			name:     "simple_usernames",
 			template: "Users: {{ admin_username }}, {{ user_username }}",

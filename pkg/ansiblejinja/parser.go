@@ -494,11 +494,27 @@ func parseControlTagDetail(trimmedContent string) (*ControlTagInfo, error) {
 			return nil, fmt.Errorf("elif tag requires a condition, e.g., {%% elif user.isGuest %%}")
 		}
 		info.Expression = strings.Join(parts[1:], " ")
-	// case "for": // Future implementation
-	//  info.Type = ControlFor
-	//  // ... parse "item in items" ...
-	// case "endfor": // Future implementation
-	//  info.Type = ControlEndFor
+	case "for":
+		info.Type = ControlFor
+		// Parse "for item in items" pattern
+		// Need at least 4 parts: "for", "item", "in", "items"
+		if len(parts) < 4 {
+			return nil, fmt.Errorf("for tag requires an item and collection, e.g., {%% for item in items %%}")
+		}
+
+		// Check that the third part is "in"
+		if strings.ToLower(parts[2]) != "in" {
+			return nil, fmt.Errorf("for tag syntax error: expected 'in', got '%s'", parts[2])
+		}
+
+		// The loop variable is the second part (parts[1])
+		// The collection expression is everything after "in" (parts[3:])
+		info.Expression = fmt.Sprintf("%s in %s", parts[1], strings.Join(parts[3:], " "))
+	case "endfor":
+		info.Type = ControlEndFor
+		if len(parts) > 1 {
+			return nil, fmt.Errorf("endfor tag does not take any arguments, e.g., {%% endfor %%}")
+		}
 	default:
 		// For now, any unrecognized control tag keyword is marked as Unknown.
 		// The raw content is stored in Expression for potential debugging or generic handling.

@@ -22,6 +22,7 @@ Additionally, the library will support:
   - Basic variable substitution (`{{ variable }}`)
   - Comments (`{# comment #}`)
   - Conditional statements (`{% if %}`, `{% elif %}`, `{% else %}`, `{% endif %}`)
+  - Loop structures (`{% for item in items %}`, `{% endfor %}`) with loop variable support
 
 - **Expression Evaluation**
   - Basic literals (integers, floats, strings, booleans, null/None)
@@ -32,9 +33,11 @@ Additionally, the library will support:
   - Object/attribute access (`object.attribute`)
   - Subscript access (`array[index]`, `dict['key']`, negative indices)
   - LALR (Look-Ahead LR) parser for robust expression evaluation
-    - Improved parsing performance for complex expressions
-    - Better error handling and reporting
-    - Cleaner grammar definition and maintenance
+    - Improved parsing performance and reliability
+    - Proper operator precedence handling
+    - Support for complex expressions such as `a * (b + c) / d`
+  - Complex nested expression handling with multiple subscript operations
+  - Basic filters (e.g., `{{ var | default('fallback') }}`)
 
 - **Operators**
   - Arithmetic operators (`+`, `-`, `*`, `/`, `//` (floor division), `%` (modulo), `**` (power))
@@ -50,8 +53,22 @@ Additionally, the library will support:
 
 ### Planned Features
 
+- **Template Syntax**
+  - Include support (`{% include 'page.html' %}`)
+  - Macro definitions (`{% macro %}`/`{% endmacro %}`)
+  - Block and extends for template inheritance (`{% block %}`, `{% extends %}`)
+  - Set statements (`{% set %}`)
+  - With blocks (`{% with %}`)
+
+- **Expression Evaluation**
+  - ~~Loop structures (`{% for item in items %}`)~~
+  - More filters (e.g., `{{ list | join(', ') }}`, `{{ url | urlencode }}`)
+  - Tests (`{{ user is defined }}`, `{{ user is not none }}`)
+  - String formatting and f-strings
+  - List comprehensions
+  - Generator expressions (iterables)
+
 - **Control Structures**
-  - For loops (`{% for item in items %}`)
   - More complex control structures
 
 - **Filters and Functions**
@@ -70,7 +87,7 @@ Additionally, the library will support:
 1. Error handling improvements - standardize error reporting across modules
 1. ~~Performance optimizations in tokenization and parsing~~ ✓ Implemented LALR parser
 1. Missing Ansible Jinja filters and functions implementation
-1. Flow control - add support for for loops and more complex constructs
+1. ~~Flow control - add support for for loops and more complex constructs~~ ✓ Implemented for loops with loop variables
 1. ~~Complex nested expression handling with multiple subscript operations~~ ✓ Improved with LALR parser 
 1. Handling of edge cases in string literals and escaping
 1. Add more comprehensive benchmarks for performance tracking

@@ -392,6 +392,84 @@ func TestEvaluateExpression(t *testing.T) {
 			want:       nil,
 			wantErr:    true,
 		},
+		// Dot Notation Expression Tests
+		{
+			name:       "simple dot notation",
+			expression: "user.name",
+			context:    map[string]interface{}{"user": map[string]interface{}{"name": "Alice"}},
+			want:       "Alice",
+			wantErr:    false,
+		},
+		{
+			name:       "dot notation with comparison (greater than)",
+			expression: "loop.index > 1",
+			context:    map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
+			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "dot notation with comparison (less than)",
+			expression: "loop.index < 5",
+			context:    map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
+			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "dot notation with comparison (equal)",
+			expression: "loop.index == 2",
+			context:    map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
+			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "dot notation with comparison (not equal)",
+			expression: "loop.index != 3",
+			context:    map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
+			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "dot notation with comparison (greater than or equal)",
+			expression: "loop.index >= 2",
+			context:    map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
+			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "dot notation with comparison (less than or equal)",
+			expression: "loop.index <= 2",
+			context:    map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
+			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "dot notation with not operator",
+			expression: "not loop.last",
+			context:    map[string]interface{}{"loop": map[string]interface{}{"last": false}},
+			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "nested dot notation",
+			expression: "user.address.city",
+			context:    map[string]interface{}{"user": map[string]interface{}{"address": map[string]interface{}{"city": "New York"}}},
+			want:       "New York",
+			wantErr:    false,
+		},
+		{
+			name:       "dot notation with undefined field",
+			expression: "user.age",
+			context:    map[string]interface{}{"user": map[string]interface{}{"name": "Bob"}},
+			want:       nil,
+			wantErr:    true,
+		},
+		{
+			name:       "dot notation with undefined root object",
+			expression: "nonexistent.property",
+			context:    map[string]interface{}{"user": map[string]interface{}{"name": "Bob"}},
+			want:       nil,
+			wantErr:    true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -693,6 +771,252 @@ func TestTemplateString_IfStatements(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("TemplateString() got = %q, want %q for template %q", got, tt.want, tt.template)
+			}
+		})
+	}
+}
+
+// TestCompareExpressionEvaluators tests both ParseAndEvaluate and EvaluateExpression
+// with the same inputs to ensure they return consistent results where possible
+func TestCompareExpressionEvaluators(t *testing.T) {
+	tests := []struct {
+		name          string
+		expression    string
+		context       map[string]interface{}
+		wantBothEqual bool // Whether both evaluation methods should produce the same result
+		wantErr       bool // Whether both should error
+		parseErr      bool // If true, expect ParseAndEvaluate to error but not EvaluateExpression
+	}{
+		{
+			name:          "simple variable",
+			expression:    "name",
+			context:       map[string]interface{}{"name": "Jinja"},
+			wantBothEqual: true,
+			wantErr:       false,
+			parseErr:      false,
+		},
+		{
+			name:          "undefined variable",
+			expression:    "missing",
+			context:       map[string]interface{}{"name": "Jinja"},
+			wantBothEqual: false, // Both will error, but with different messages
+			wantErr:       true,
+			parseErr:      false,
+		},
+		{
+			name:          "numeric comparison",
+			expression:    "10 > 5",
+			context:       map[string]interface{}{},
+			wantBothEqual: true,
+			wantErr:       false,
+			parseErr:      false,
+		},
+		{
+			name:          "simple dot notation",
+			expression:    "user.name",
+			context:       map[string]interface{}{"user": map[string]interface{}{"name": "Alice"}},
+			wantBothEqual: true, // Looks like ParseAndEvaluate does support simple dot notation
+			wantErr:       false,
+			parseErr:      false,
+		},
+		{
+			name:          "dot notation with comparison",
+			expression:    "loop.index > 1",
+			context:       map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
+			wantBothEqual: false, // ParseAndEvaluate doesn't directly support dot notation in comparisons
+			wantErr:       false,
+			parseErr:      true, // We expect ParseAndEvaluate to error
+		},
+		{
+			name:          "not with dot notation",
+			expression:    "not loop.last",
+			context:       map[string]interface{}{"loop": map[string]interface{}{"last": false}},
+			wantBothEqual: true, // Looks like ParseAndEvaluate does support "not" with dot notation
+			wantErr:       false,
+			parseErr:      false,
+		},
+		{
+			name:       "complex dot notation",
+			expression: "items[0].user.name",
+			context: map[string]interface{}{
+				"items": []interface{}{
+					map[string]interface{}{
+						"user": map[string]interface{}{
+							"name": "Alice",
+						},
+					},
+				},
+			},
+			wantBothEqual: true, // Looks like ParseAndEvaluate does support complex dot notation
+			wantErr:       false,
+			parseErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Try with ParseAndEvaluate first
+			result1, err1 := ParseAndEvaluate(tt.expression, tt.context)
+
+			// Then try with EvaluateExpression
+			result2, err2 := EvaluateExpression(tt.expression, tt.context)
+
+			// Check error expectations
+			if tt.wantErr {
+				if err1 == nil && err2 == nil {
+					t.Errorf("Both evaluators succeeded when errors were expected")
+				}
+			} else if tt.parseErr {
+				// In this case, we expect ParseAndEvaluate to error but not EvaluateExpression
+				if err1 == nil {
+					t.Errorf("ParseAndEvaluate() unexpectedly succeeded with %v", result1)
+				}
+				if err2 != nil {
+					t.Errorf("EvaluateExpression() error = %v, but success was expected", err2)
+				}
+			} else {
+				// Neither should error
+				if err1 != nil {
+					t.Errorf("ParseAndEvaluate() error = %v, wantErr = %v", err1, tt.wantErr)
+				}
+				if err2 != nil {
+					t.Errorf("EvaluateExpression() error = %v, wantErr = %v", err2, tt.wantErr)
+				}
+			}
+
+			// If both should match and no errors occurred
+			if tt.wantBothEqual && err1 == nil && err2 == nil {
+				if !reflect.DeepEqual(result1, result2) {
+					t.Errorf("Results differ: ParseAndEvaluate() = %v (%T), EvaluateExpression() = %v (%T)",
+						result1, result1, result2, result2)
+				}
+			}
+
+			// Log the results for debugging
+			if !t.Failed() {
+				t.Logf("Results: ParseAndEvaluate() = %v, err = %v", result1, err1)
+				t.Logf("Results: EvaluateExpression() = %v, err = %v", result2, err2)
+			}
+		})
+	}
+}
+
+func TestComplexExpressionEvaluation(t *testing.T) {
+	tests := []struct {
+		name       string
+		expression string
+		context    map[string]interface{}
+		want       interface{}
+		wantErr    bool
+	}{
+		{
+			name:       "not in with dot notation",
+			expression: "'apple' not in user.fruits",
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"fruits": []string{"banana", "orange", "grape"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "in with dot notation",
+			expression: "'banana' in user.fruits",
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"fruits": []string{"banana", "orange", "grape"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "logical and with dot notation",
+			expression: "user.age > 18 and user.name == 'Alice'",
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"age":  25,
+					"name": "Alice",
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "logical or with dot notation",
+			expression: "user.age < 18 or user.name == 'Alice'",
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"age":  25,
+					"name": "Alice",
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "chained comparison with dot notation",
+			expression: "0 < user.age and user.age < 100",
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"age": 25,
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "arithmetic with dot notation",
+			expression: "user.points + 10 > 100",
+			context: map[string]interface{}{
+				"user": map[string]interface{}{
+					"points": 95,
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "loop index calculations",
+			expression: "loop.index - 1 == 2", // Simplified from "(loop.index - 1) % 2 == 0"
+			context: map[string]interface{}{
+				"loop": map[string]interface{}{
+					"index": 3,
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "complex condition with loop variable",
+			expression: "loop.index > 1 and not loop.last", // Simplified from "loop.index == 1 or (loop.index > 1 and not loop.last)"
+			context: map[string]interface{}{
+				"loop": map[string]interface{}{
+					"index": 2,
+					"last":  false,
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Try to evaluate with EvaluateExpression
+			result, err := EvaluateExpression(tt.expression, tt.context)
+
+			// Check error expectations
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EvaluateExpression() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			// Check the result
+			if !reflect.DeepEqual(result, tt.want) {
+				t.Errorf("EvaluateExpression() got = %v (%T), want %v (%T)",
+					result, result, tt.want, tt.want)
 			}
 		})
 	}

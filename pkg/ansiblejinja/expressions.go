@@ -887,6 +887,19 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 			args = append(args, arg)
 		}
 
+		// Special case for filters when the callable is a string identifier
+		if identifier, ok := node.Children[0].Value.(string); ok && node.Children[0].Type == NodeIdentifier {
+			// Check if it's a filter function
+			if identifier == "default" && len(args) > 0 {
+				// Apply default filter directly
+				// If callable/first argument is nil or falsy, return the first default arg
+				if callable == nil || !isTruthy(callable) {
+					return args[0], nil
+				}
+				return callable, nil
+			}
+		}
+
 		return callFunction(callable, args)
 
 	case NodeList:
@@ -978,4 +991,33 @@ func evaluateCompoundExpression(expr string, context map[string]interface{}) (in
 // containsSubscript checks if the expression contains subscript operations
 func containsSubscript(expr string) bool {
 	return strings.Contains(expr, "[") && strings.Contains(expr, "]")
+}
+
+// evaluateDotNotation handles parsing and evaluation of dot notation expressions like 'user.name'
+// It takes a dot-notation string (e.g., "loop.index") and context, parses the parts,
+// and returns the value of the nested property
+func evaluateDotNotation(dotNotation string, context map[string]interface{}) (interface{}, error) {
+	parts := strings.Split(dotNotation, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid dot notation: %s", dotNotation)
+	}
+
+	// Get the root object from context
+	rootName := parts[0]
+	obj, exists := context[rootName]
+	if !exists {
+		return nil, fmt.Errorf("variable '%s' not found in context", rootName)
+	}
+
+	// Navigate through the object properties
+	for i := 1; i < len(parts); i++ {
+		propName := parts[i]
+		var err error
+		obj, err = getAttributeValue(obj, propName)
+		if err != nil {
+			return nil, fmt.Errorf("error accessing property '%s' in '%s': %v", propName, dotNotation, err)
+		}
+	}
+
+	return obj, nil
 }
