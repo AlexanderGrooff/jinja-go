@@ -120,5 +120,12 @@
         }
       }
     }
+  },
+  {
+    "name": "map_get_method",
+    "template": "{{ mapping.get('key') }}",
+    "context": {
+      "mapping": {"key": "value"}
+    }
   }
 ] 

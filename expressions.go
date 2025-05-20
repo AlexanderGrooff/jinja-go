@@ -941,48 +941,122 @@ func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
 		return nil, fmt.Errorf("expected function call node, got %v", node.Type)
 	}
 
-	// First child is the function name
+	// First child is the function name or object method
 	if len(node.Children) < 1 {
 		return nil, fmt.Errorf("function call node missing function identifier")
 	}
 
-	// Evaluate the function name (first child)
+	// Handle two cases:
+	// 1. Direct function call: function(arg1, arg2)
+	// 2. Method call on an object: object.method(arg1, arg2)
+
 	funcNode := node.Children[0]
-	if funcNode.Type != NodeIdentifier {
-		return nil, fmt.Errorf("expected function name to be an identifier, got %v", funcNode.Type)
-	}
 
-	funcName := funcNode.Identifier
+	// Case 1: Regular function call (where funNode is an identifier)
+	if funcNode.Type == NodeIdentifier {
+		funcName := funcNode.Identifier
 
-	// Check if the function exists in the context
-	funcValue, exists := e.context[funcName]
-	if !exists {
-		return nil, fmt.Errorf("function '%s' is not defined", funcName)
-	}
-
-	// Check if it's actually a function
-	funcTyped, ok := funcValue.(FunctionFunc)
-	if !ok {
-		return nil, fmt.Errorf("'%s' is not a callable function", funcName)
-	}
-
-	// Evaluate all arguments
-	args := make([]interface{}, 0, len(node.Children)-1)
-	for i := 1; i < len(node.Children); i++ {
-		argValue, err := e.Evaluate(node.Children[i])
-		if err != nil {
-			return nil, fmt.Errorf("error evaluating argument %d for function '%s': %v", i, funcName, err)
+		// Check if the function exists in the context
+		funcValue, exists := e.context[funcName]
+		if !exists {
+			return nil, fmt.Errorf("function '%s' is not defined", funcName)
 		}
-		args = append(args, argValue)
+
+		// Check if it's actually a function
+		funcTyped, ok := funcValue.(FunctionFunc)
+		if !ok {
+			return nil, fmt.Errorf("'%s' is not a callable function", funcName)
+		}
+
+		// Evaluate all arguments
+		args := make([]interface{}, 0, len(node.Children)-1)
+		for i := 1; i < len(node.Children); i++ {
+			argValue, err := e.Evaluate(node.Children[i])
+			if err != nil {
+				return nil, fmt.Errorf("error evaluating argument %d for function '%s': %v", i, funcName, err)
+			}
+			args = append(args, argValue)
+		}
+
+		// Call the function with the arguments
+		result, err := funcTyped(args...)
+		if err != nil {
+			return nil, fmt.Errorf("error calling function '%s': %v", funcName, err)
+		}
+
+		return result, nil
 	}
 
-	// Call the function with the arguments
-	result, err := funcTyped(args...)
-	if err != nil {
-		return nil, fmt.Errorf("error calling function '%s': %v", funcName, err)
+	// Case 2: Method call on an object (where funcNode is an attribute node)
+	if funcNode.Type == NodeAttribute {
+		// Get the object
+		if len(funcNode.Children) != 1 {
+			return nil, fmt.Errorf("attribute access requires an object")
+		}
+
+		// Evaluate the object that the method is being called on
+		obj, err := e.Evaluate(funcNode.Children[0])
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating object for method call: %v", err)
+		}
+
+		// Get the method name
+		methodName := funcNode.Identifier
+
+		// Evaluate all arguments
+		args := make([]interface{}, 0, len(node.Children))
+
+		// The first argument is the object itself (like 'self' in Python)
+		args = append(args, obj)
+
+		// Evaluate the rest of the arguments
+		for i := 1; i < len(node.Children); i++ {
+			argValue, err := e.Evaluate(node.Children[i])
+			if err != nil {
+				return nil, fmt.Errorf("error evaluating argument %d for method '%s': %v", i, methodName, err)
+			}
+			args = append(args, argValue)
+		}
+
+		// Determine the type of object to find appropriate method
+		var methodFunc FunctionFunc
+
+		// Check object type and find corresponding method
+		switch obj.(type) {
+		case map[string]interface{}, map[interface{}]interface{}:
+			// It's a map/dictionary type
+			if mapMethods, ok := GlobalMethods["map"]; ok {
+				if method, ok := mapMethods[methodName]; ok {
+					methodFunc = method
+				}
+			}
+		default:
+			// Use reflection to get the type name
+			t := reflect.TypeOf(obj)
+			if t != nil {
+				typeName := t.String()
+				if methods, ok := GlobalMethods[typeName]; ok {
+					if method, ok := methods[methodName]; ok {
+						methodFunc = method
+					}
+				}
+			}
+		}
+
+		if methodFunc == nil {
+			return nil, fmt.Errorf("method '%s' is not defined for object type %T", methodName, obj)
+		}
+
+		// Call the method with the object as first argument
+		result, err := methodFunc(args...)
+		if err != nil {
+			return nil, fmt.Errorf("error calling method '%s': %v", methodName, err)
+		}
+
+		return result, nil
 	}
 
-	return result, nil
+	return nil, fmt.Errorf("expected function name to be an identifier, got %v", funcNode.Type)
 }
 
 // ParseAndEvaluate parses and evaluates an expression string with context

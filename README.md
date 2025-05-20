@@ -138,6 +138,7 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
   - Pythonic data types:
     - Lists (`[1, 2, 3]`)
     - Dictionaries (`{'key': 'value'}`)
+    - Dictionary methods like `.get()` (`dict.get('key', 'default')`)
   - Object/attribute access (`object.attribute`)
   - Subscript access (`array[index]`, `dict['key']`, negative indices)
   - LALR (Look-Ahead LR) parser for robust expression evaluation
