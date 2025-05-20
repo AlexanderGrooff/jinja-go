@@ -4,3 +4,5 @@ globs:
 alwaysApply: true
 ---
 Performance of this library is critical. Always ensure that the speed of the Jinja templating engine is as fast as possible.
+
+You can use the benchmark commands available in [Makefile](mdc:Makefile) to start and compare benchmarks.

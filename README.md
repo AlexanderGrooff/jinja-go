@@ -31,6 +31,10 @@ Additionally, the library will support:
     - Dictionaries (`{'key': 'value'}`)
   - Object/attribute access (`object.attribute`)
   - Subscript access (`array[index]`, `dict['key']`, negative indices)
+  - LALR (Look-Ahead LR) parser for robust expression evaluation
+    - Improved parsing performance for complex expressions
+    - Better error handling and reporting
+    - Cleaner grammar definition and maintenance
 
 - **Operators**
   - Arithmetic operators (`+`, `-`, `*`, `/`, `//` (floor division), `%` (modulo), `**` (power))
@@ -64,10 +68,10 @@ Additionally, the library will support:
 
 1. Inconsistency between expression parser and template parser - refine how they work together for complex evaluations
 1. Error handling improvements - standardize error reporting across modules
-1. Performance optimizations in tokenization and parsing
+1. ~~Performance optimizations in tokenization and parsing~~ ✓ Implemented LALR parser
 1. Missing Ansible Jinja filters and functions implementation
 1. Flow control - add support for for loops and more complex constructs
-1. Complex nested expression handling with multiple subscript operations
+1. ~~Complex nested expression handling with multiple subscript operations~~ ✓ Improved with LALR parser 
 1. Handling of edge cases in string literals and escaping
 1. Add more comprehensive benchmarks for performance tracking
 1. Complete test coverage for all expression and template features

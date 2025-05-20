@@ -661,3 +661,149 @@ func TestEvaluateCompoundExpression(t *testing.T) {
 		})
 	}
 }
+
+func TestLALRParser(t *testing.T) {
+	tests := []struct {
+		name     string
+		expr     string
+		context  map[string]interface{}
+		expected interface{}
+		wantErr  bool
+	}{
+		{
+			name:     "Simple variable",
+			expr:     "foo",
+			context:  map[string]interface{}{"foo": "bar"},
+			expected: "bar",
+			wantErr:  false,
+		},
+		{
+			name:     "Simple arithmetic",
+			expr:     "1 + 2 * 3",
+			context:  map[string]interface{}{},
+			expected: 7,
+			wantErr:  false,
+		},
+		{
+			name:     "Operator precedence",
+			expr:     "2 + 3 * 4 + 5",
+			context:  map[string]interface{}{},
+			expected: 19,
+			wantErr:  false,
+		},
+		{
+			name:     "Parenthesized expression",
+			expr:     "(2 + 3) * 4",
+			context:  map[string]interface{}{},
+			expected: 20,
+			wantErr:  false,
+		},
+		{
+			name:     "Nested complex expression",
+			expr:     "10 + 2 * (3 + 4 * (5 - 2))",
+			context:  map[string]interface{}{},
+			expected: 40,
+			wantErr:  false,
+		},
+		{
+			name:     "Variable in expression",
+			expr:     "count * 2 + offset",
+			context:  map[string]interface{}{"count": 5, "offset": 3},
+			expected: 13,
+			wantErr:  false,
+		},
+		{
+			name:     "Dictionary literal",
+			expr:     "{'name': 'Alice', 'age': 30}",
+			context:  map[string]interface{}{},
+			expected: map[string]interface{}{"name": "Alice", "age": 30},
+			wantErr:  false,
+		},
+		{
+			name:     "List literal",
+			expr:     "[1, 2, 3, 4]",
+			context:  map[string]interface{}{},
+			expected: []interface{}{1, 2, 3, 4},
+			wantErr:  false,
+		},
+		{
+			name:     "Complex compound access",
+			expr:     "{'users': [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}]}['users'][0]['name']",
+			context:  map[string]interface{}{},
+			expected: "Alice",
+			wantErr:  false,
+		},
+		{
+			name:     "Nested dictionary",
+			expr:     "config['server']['host']",
+			context:  map[string]interface{}{"config": map[string]interface{}{"server": map[string]interface{}{"host": "localhost"}}},
+			expected: "localhost",
+			wantErr:  false,
+		},
+		{
+			name:     "Logic operators short-circuit - AND",
+			expr:     "false and undefined_var",
+			context:  map[string]interface{}{"false": false},
+			expected: false,
+			wantErr:  false,
+		},
+		{
+			name:     "Logic operators short-circuit - OR",
+			expr:     "true or undefined_var",
+			context:  map[string]interface{}{"true": true},
+			expected: true,
+			wantErr:  false,
+		},
+		{
+			name:     "Unary operators",
+			expr:     "not False",
+			context:  map[string]interface{}{},
+			expected: true,
+			wantErr:  false,
+		},
+		{
+			name:     "Negative number",
+			expr:     "-42",
+			context:  map[string]interface{}{},
+			expected: -42,
+			wantErr:  false,
+		},
+		{
+			name:    "Syntax error",
+			expr:    "1 + * 2",
+			context: map[string]interface{}{},
+			wantErr: true,
+		},
+		{
+			name:    "Undefined variable",
+			expr:    "undefined_var",
+			context: map[string]interface{}{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test our new LALR parser
+			got, err := ParseAndEvaluate(tt.expr, tt.context)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("LALR Parser: error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				if !reflect.DeepEqual(got, tt.expected) {
+					t.Errorf("LALR Parser: got = %v, want %v", got, tt.expected)
+				}
+			}
+
+			// Compare with EvaluateExpression result for compatibility
+			got2, err := EvaluateExpression(tt.expr, tt.context)
+			if (err != nil) != tt.wantErr {
+				t.Logf("Note: Original EvaluateExpression got error = %v, but LALR parser had wantErr %v", err, tt.wantErr)
+			} else if !tt.wantErr && !reflect.DeepEqual(got, got2) {
+				t.Logf("Note: LALR parser got = %v, but original EvaluateExpression got = %v", got, got2)
+			}
+		})
+	}
+}

@@ -87,7 +87,7 @@ func BenchmarkEvaluateExpression(b *testing.B) {
 	}
 }
 
-// Benchmark the Tokenize function to isolate lexing performance
+// Benchmark the tokenization phase specifically
 func BenchmarkTokenize(b *testing.B) {
 	tests := []struct {
 		name string
@@ -119,8 +119,8 @@ func BenchmarkTokenize(b *testing.B) {
 		b.Run(tt.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				parser := NewExpressionParser(tt.expr)
-				err := parser.tokenize()
+				lexer := NewLexer(tt.expr)
+				_, err := lexer.Tokenize()
 				if err != nil {
 					b.Fatalf("Error tokenizing expression: %v", err)
 				}
@@ -161,13 +161,14 @@ func BenchmarkParse(b *testing.B) {
 		b.Run(tt.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				parser := NewExpressionParser(tt.expr)
-				err := parser.tokenize()
+				lexer := NewLexer(tt.expr)
+				tokens, err := lexer.Tokenize()
 				if err != nil {
 					b.Fatalf("Error tokenizing expression: %v", err)
 				}
 
-				_, err = parser.parse()
+				parser := NewExprParser(tokens)
+				_, err = parser.Parse()
 				if err != nil {
 					b.Fatalf("Error parsing expression: %v", err)
 				}
@@ -223,14 +224,15 @@ func BenchmarkNestedDictionaryParsing(b *testing.B) {
 		b.Run(tt.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				parser := NewExpressionParser(tt.expr)
-				err := parser.tokenize()
+				lexer := NewLexer(tt.expr)
+				tokens, err := lexer.Tokenize()
 				if err != nil {
 					b.Skipf("Skipping test due to tokenizing error: %v", err)
 					return
 				}
 
-				_, err = parser.parse()
+				parser := NewExprParser(tokens)
+				_, err = parser.Parse()
 				if err != nil {
 					b.Skipf("Skipping test due to parsing error: %v", err)
 					return
@@ -518,5 +520,109 @@ func BenchmarkNestedDictionaryTemplates(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+func BenchmarkComplexExpressionLALR(b *testing.B) {
+	expr := "10 + 2 * (3 + 4 * (5 - 2)) + [1, 2, 3, 4][2] + {'a': 1, 'b': 2, 'c': 3}['b']"
+	context := map[string]interface{}{
+		"var1": 100,
+		"var2": 200,
+		"obj": map[string]interface{}{
+			"attr": "value",
+			"items": []interface{}{
+				map[string]interface{}{"name": "item1"},
+				map[string]interface{}{"name": "item2"},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := ParseAndEvaluate(expr, context)
+		if err != nil {
+			b.Fatalf("Failed to evaluate expression: %v", err)
+		}
+		_ = result
+	}
+}
+
+func BenchmarkNestedAccessLALR(b *testing.B) {
+	expr := "obj.items[1].name"
+	context := map[string]interface{}{
+		"obj": map[string]interface{}{
+			"items": []interface{}{
+				map[string]interface{}{"name": "item1"},
+				map[string]interface{}{"name": "item2"},
+			},
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := ParseAndEvaluate(expr, context)
+		if err != nil {
+			b.Fatalf("Failed to evaluate expression: %v", err)
+		}
+		_ = result
+	}
+}
+
+func BenchmarkDictLiteralLALR(b *testing.B) {
+	expr := "{'users': [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}]}['users'][1]['name']"
+	context := map[string]interface{}{}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := ParseAndEvaluate(expr, context)
+		if err != nil {
+			b.Fatalf("Failed to evaluate expression: %v", err)
+		}
+		_ = result
+	}
+}
+
+func BenchmarkLongExpressionLALR(b *testing.B) {
+	expr := "var1 + var2 * var3 + var4 * (var5 + var6) - var7 / var8 + var9 * var10"
+	context := map[string]interface{}{
+		"var1": 10, "var2": 20, "var3": 30, "var4": 40, "var5": 50,
+		"var6": 60, "var7": 70, "var8": 80, "var9": 90, "var10": 100,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := ParseAndEvaluate(expr, context)
+		if err != nil {
+			b.Fatalf("Failed to evaluate expression: %v", err)
+		}
+		_ = result
+	}
+}
+
+// Helper function for benchmarks
+func benchmarkParsingAndEvaluation(b *testing.B, expression string, context map[string]interface{}) {
+	// Parse just once outside the loop to measure only evaluation time
+	lexer := NewLexer(expression)
+	tokens, err := lexer.Tokenize()
+	if err != nil {
+		b.Fatalf("Failed to tokenize expression: %v", err)
+	}
+
+	parser := NewExprParser(tokens)
+	ast, err := parser.Parse()
+	if err != nil {
+		b.Fatalf("Failed to parse expression: %v", err)
+	}
+
+	// Create evaluator
+	evaluator := NewEvaluator(context)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := evaluator.Evaluate(ast)
+		if err != nil {
+			b.Fatalf("Failed to evaluate expression: %v", err)
+		}
+		_ = result
 	}
 }

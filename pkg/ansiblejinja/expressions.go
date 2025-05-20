@@ -1,5 +1,27 @@
 package ansiblejinja
 
+/*
+This file implements a LALR (Look-Ahead LR) parser for Jinja expressions.
+The implementation follows a three-phase approach:
+
+1. Lexical Analysis (Lexer):
+   - Scans the input string and converts it to a sequence of tokens
+   - Handles literals, operators, identifiers, and other lexical elements
+
+2. Syntactic Analysis (Parser):
+   - Parses the token stream into an Abstract Syntax Tree (AST)
+   - Implements operator precedence and associativity
+   - Handles complex nested expressions
+
+3. Semantic Analysis (Evaluator):
+   - Evaluates the AST against a provided context
+   - Implements operator semantics and variable resolution
+   - Returns the final computed value
+
+This approach provides better performance, maintainability, and error handling
+compared to recursive descent parsing, especially for complex expressions.
+*/
+
 import (
 	"fmt"
 	"reflect"
@@ -63,7 +85,7 @@ var operatorPrecedence = map[string]int{
 	"**": 70,
 }
 
-// NodeType represents the type of AST node
+// ExprNodeType represents the type of AST node
 type ExprNodeType int
 
 const (
@@ -88,195 +110,216 @@ type ExprNode struct {
 	Identifier string
 }
 
-// ExpressionParser parses and evaluates Jinja expressions
-type ExpressionParser struct {
-	input     string
-	tokens    []Token
-	position  int
-	currentOp string
+// Lexer breaks input string into tokens
+type Lexer struct {
+	input      string
+	pos        int
+	currentPos int
+	tokens     []Token
 }
 
-// NewExpressionParser creates a new expression parser
-func NewExpressionParser(input string) *ExpressionParser {
-	return &ExpressionParser{
-		input:    input,
-		tokens:   []Token{},
-		position: 0,
+// NewLexer creates a new lexer instance
+func NewLexer(input string) *Lexer {
+	return &Lexer{
+		input:      input,
+		pos:        0,
+		currentPos: 0,
+		tokens:     []Token{},
 	}
 }
 
-// tokenize breaks the input string into tokens
-func (p *ExpressionParser) tokenize() error {
-	p.tokens = []Token{}
-	pos := 0
-	input := strings.TrimSpace(p.input)
+// Tokenize breaks the input string into tokens
+func (l *Lexer) Tokenize() ([]Token, error) {
+	l.tokens = []Token{}
+	l.pos = 0
+	input := strings.TrimSpace(l.input)
 
-	for pos < len(input) {
-		if input[pos] == ' ' || input[pos] == '\t' || input[pos] == '\n' || input[pos] == '\r' {
-			// Skip whitespace
-			pos++
+	for l.pos < len(input) {
+		if isWhitespace(input[l.pos]) {
+			l.pos++
 			continue
 		}
 
 		// Single-character tokens
-		switch input[pos] {
+		switch input[l.pos] {
 		case '(':
-			p.tokens = append(p.tokens, Token{Type: TokenLeftParen, Value: "(", Position: pos})
-			pos++
+			l.addToken(TokenLeftParen, "(")
 			continue
 		case ')':
-			p.tokens = append(p.tokens, Token{Type: TokenRightParen, Value: ")", Position: pos})
-			pos++
+			l.addToken(TokenRightParen, ")")
 			continue
 		case '[':
-			p.tokens = append(p.tokens, Token{Type: TokenLeftBracket, Value: "[", Position: pos})
-			pos++
+			l.addToken(TokenLeftBracket, "[")
 			continue
 		case ']':
-			p.tokens = append(p.tokens, Token{Type: TokenRightBracket, Value: "]", Position: pos})
-			pos++
+			l.addToken(TokenRightBracket, "]")
 			continue
 		case '{':
-			p.tokens = append(p.tokens, Token{Type: TokenLeftBrace, Value: "{", Position: pos})
-			pos++
+			l.addToken(TokenLeftBrace, "{")
 			continue
 		case '}':
-			p.tokens = append(p.tokens, Token{Type: TokenRightBrace, Value: "}", Position: pos})
-			pos++
+			l.addToken(TokenRightBrace, "}")
 			continue
 		case ',':
-			p.tokens = append(p.tokens, Token{Type: TokenComma, Value: ",", Position: pos})
-			pos++
+			l.addToken(TokenComma, ",")
 			continue
 		case '.':
-			p.tokens = append(p.tokens, Token{Type: TokenDot, Value: ".", Position: pos})
-			pos++
+			l.addToken(TokenDot, ".")
 			continue
 		case ':':
-			p.tokens = append(p.tokens, Token{Type: TokenColon, Value: ":", Position: pos})
-			pos++
+			l.addToken(TokenColon, ":")
 			continue
 		case '|':
-			p.tokens = append(p.tokens, Token{Type: TokenPipe, Value: "|", Position: pos})
-			pos++
+			l.addToken(TokenPipe, "|")
 			continue
 		}
 
 		// String literals
-		if input[pos] == '\'' || input[pos] == '"' {
-			quoteChar := input[pos]
-			start := pos
-			pos++ // Skip the opening quote
-
-			for pos < len(input) && input[pos] != quoteChar {
-				// Handle escape sequences
-				if input[pos] == '\\' && pos+1 < len(input) {
-					pos += 2 // Skip the backslash and the escaped character
-				} else {
-					pos++
-				}
+		if input[l.pos] == '\'' || input[l.pos] == '"' {
+			if err := l.tokenizeString(); err != nil {
+				return nil, err
 			}
-
-			if pos >= len(input) {
-				return fmt.Errorf("unterminated string literal at position %d", start)
-			}
-
-			// Include the closing quote
-			pos++
-			strLiteral := input[start:pos]
-			p.tokens = append(p.tokens, Token{Type: TokenLiteral, Value: strLiteral, Position: start})
 			continue
 		}
 
 		// Numbers
-		if isDigit(input[pos]) {
-			start := pos
-			hasDot := false
-
-			for pos < len(input) && (isDigit(input[pos]) || (input[pos] == '.' && !hasDot)) {
-				if input[pos] == '.' {
-					hasDot = true
-				}
-				pos++
-			}
-
-			numStr := input[start:pos]
-			p.tokens = append(p.tokens, Token{Type: TokenLiteral, Value: numStr, Position: start})
+		if isDigit(input[l.pos]) {
+			l.tokenizeNumber()
 			continue
 		}
 
-		// Multi-character operators: ==, !=, >=, <=, **, //, not in, is not
-		if pos+1 < len(input) {
-			twoChars := input[pos : pos+2]
-			if _, found := operators[twoChars]; found {
-				p.tokens = append(p.tokens, Token{Type: TokenOperator, Value: twoChars, Position: pos})
-				pos += 2
-				continue
-			}
-		}
-
-		// Check for longer operators like "not in" and "is not"
-		if pos+6 < len(input) && input[pos:pos+6] == "not in" &&
-			(pos+6 >= len(input) || !isAlpha(input[pos+6])) {
-			p.tokens = append(p.tokens, Token{Type: TokenOperator, Value: "not in", Position: pos})
-			pos += 6
-			continue
-		}
-
-		if pos+6 < len(input) && input[pos:pos+6] == "is not" &&
-			(pos+6 >= len(input) || !isAlpha(input[pos+6])) {
-			p.tokens = append(p.tokens, Token{Type: TokenOperator, Value: "is not", Position: pos})
-			pos += 6
-			continue
-		}
-
-		// Check for "is" operator
-		if pos+2 < len(input) && input[pos:pos+2] == "is" &&
-			(pos+2 >= len(input) || !isAlpha(input[pos+2])) {
-			p.tokens = append(p.tokens, Token{Type: TokenOperator, Value: "is", Position: pos})
-			pos += 2
-			continue
-		}
-
-		// Single-character operators: +, -, *, /, %
-		if _, found := operators[string(input[pos])]; found {
-			p.tokens = append(p.tokens, Token{Type: TokenOperator, Value: string(input[pos]), Position: pos})
-			pos++
+		// Check for multi-character operators
+		if l.tryTokenizeOperator() {
 			continue
 		}
 
 		// Keywords and identifiers
-		if isAlpha(input[pos]) || input[pos] == '_' {
-			start := pos
-			for pos < len(input) && (isAlphaNumeric(input[pos]) || input[pos] == '_') {
-				pos++
-			}
-
-			word := input[start:pos]
-
-			// Check if it's a keyword operator
-			if _, found := operators[word]; found {
-				p.tokens = append(p.tokens, Token{Type: TokenOperator, Value: word, Position: start})
-			} else if word == "True" || word == "False" || word == "None" {
-				// Handle boolean literals and None
-				p.tokens = append(p.tokens, Token{Type: TokenLiteral, Value: word, Position: start})
-			} else {
-				// It's an identifier
-				p.tokens = append(p.tokens, Token{Type: TokenIdentifier, Value: word, Position: start})
-			}
+		if isAlpha(input[l.pos]) || input[l.pos] == '_' {
+			l.tokenizeIdentifierOrKeyword()
 			continue
 		}
 
 		// If we get here, we encountered an unexpected character
-		return fmt.Errorf("unexpected character '%c' at position %d", input[pos], pos)
+		return nil, fmt.Errorf("unexpected character '%c' at position %d", input[l.pos], l.pos)
 	}
 
 	// Add an EOF token
-	p.tokens = append(p.tokens, Token{Type: TokenEOF, Value: "", Position: len(input)})
+	l.tokens = append(l.tokens, Token{Type: TokenEOF, Value: "", Position: len(input)})
+	return l.tokens, nil
+}
+
+// addToken adds a token to the token list and advances position
+func (l *Lexer) addToken(tokenType TokenType, value string) {
+	l.tokens = append(l.tokens, Token{Type: tokenType, Value: value, Position: l.pos})
+	l.pos += len(value)
+}
+
+// tokenizeString handles string literals
+func (l *Lexer) tokenizeString() error {
+	quoteChar := l.input[l.pos]
+	start := l.pos
+	l.pos++ // Skip the opening quote
+
+	for l.pos < len(l.input) && l.input[l.pos] != quoteChar {
+		// Handle escape sequences
+		if l.input[l.pos] == '\\' && l.pos+1 < len(l.input) {
+			l.pos += 2 // Skip the backslash and the escaped character
+		} else {
+			l.pos++
+		}
+	}
+
+	if l.pos >= len(l.input) {
+		return fmt.Errorf("unterminated string literal at position %d", start)
+	}
+
+	// Include the closing quote
+	l.pos++
+	strLiteral := l.input[start:l.pos]
+	l.tokens = append(l.tokens, Token{Type: TokenLiteral, Value: strLiteral, Position: start})
 	return nil
 }
 
+// tokenizeNumber handles numeric literals
+func (l *Lexer) tokenizeNumber() {
+	start := l.pos
+	hasDot := false
+
+	for l.pos < len(l.input) && (isDigit(l.input[l.pos]) || (l.input[l.pos] == '.' && !hasDot)) {
+		if l.input[l.pos] == '.' {
+			hasDot = true
+		}
+		l.pos++
+	}
+
+	numStr := l.input[start:l.pos]
+	l.tokens = append(l.tokens, Token{Type: TokenLiteral, Value: numStr, Position: start})
+}
+
+// tryTokenizeOperator attempts to tokenize an operator
+func (l *Lexer) tryTokenizeOperator() bool {
+	// Try special operators first
+	if l.pos+6 <= len(l.input) && l.input[l.pos:l.pos+6] == "not in" {
+		l.addToken(TokenOperator, "not in")
+		return true
+	}
+
+	if l.pos+6 <= len(l.input) && l.input[l.pos:l.pos+6] == "is not" {
+		l.addToken(TokenOperator, "is not")
+		return true
+	}
+
+	// Try two-character operators
+	if l.pos+2 <= len(l.input) {
+		twoChars := l.input[l.pos : l.pos+2]
+		if _, found := operators[twoChars]; found {
+			l.addToken(TokenOperator, twoChars)
+			return true
+		}
+	}
+
+	// Try "is" operator
+	if l.pos+2 <= len(l.input) && l.input[l.pos:l.pos+2] == "is" &&
+		(l.pos+2 >= len(l.input) || !isAlpha(l.input[l.pos+2])) {
+		l.addToken(TokenOperator, "is")
+		return true
+	}
+
+	// Try single-character operators
+	if _, found := operators[string(l.input[l.pos])]; found {
+		l.addToken(TokenOperator, string(l.input[l.pos]))
+		return true
+	}
+
+	return false
+}
+
+// tokenizeIdentifierOrKeyword handles identifiers and keywords
+func (l *Lexer) tokenizeIdentifierOrKeyword() {
+	start := l.pos
+	for l.pos < len(l.input) && (isAlphaNumeric(l.input[l.pos]) || l.input[l.pos] == '_') {
+		l.pos++
+	}
+
+	word := l.input[start:l.pos]
+
+	// Check if it's a keyword operator
+	if _, found := operators[word]; found {
+		l.tokens = append(l.tokens, Token{Type: TokenOperator, Value: word, Position: start})
+	} else if word == "True" || word == "False" || word == "None" {
+		// Handle boolean literals and None
+		l.tokens = append(l.tokens, Token{Type: TokenLiteral, Value: word, Position: start})
+	} else {
+		// It's an identifier
+		l.tokens = append(l.tokens, Token{Type: TokenIdentifier, Value: word, Position: start})
+	}
+}
+
 // Helper functions for character classification
+func isWhitespace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
+
 func isDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
@@ -289,263 +332,226 @@ func isAlphaNumeric(c byte) bool {
 	return isAlpha(c) || isDigit(c)
 }
 
-// parse converts tokens to an AST
-func (p *ExpressionParser) parse() (*ExprNode, error) {
-	p.position = 0
+// Parser implements a LALR parser for Jinja expressions
+type ExprParser struct {
+	tokens   []Token
+	pos      int
+	symTable map[string]int
+}
+
+// NewParser creates a new Parser instance
+func NewExprParser(tokens []Token) *ExprParser {
+	return &ExprParser{
+		tokens:   tokens,
+		pos:      0,
+		symTable: make(map[string]int),
+	}
+}
+
+// Parse converts tokens to an AST
+func (p *ExprParser) Parse() (*ExprNode, error) {
 	return p.parseExpression(0)
 }
 
 // parseExpression parses an expression with given precedence
-func (p *ExpressionParser) parseExpression(precedence int) (*ExprNode, error) {
+func (p *ExprParser) parseExpression(precedence int) (*ExprNode, error) {
+	var left *ExprNode
+	var err error
+
 	// Parse the left-hand side of the expression
-	left, err := p.parsePrimary()
+	if p.pos >= len(p.tokens) {
+		return nil, fmt.Errorf("unexpected end of expression")
+	}
+
+	token := p.tokens[p.pos]
+	p.pos++
+
+	// Handle prefix operators and primary expressions
+	switch token.Type {
+	case TokenLiteral:
+		left, err = p.parseLiteral(token)
+	case TokenIdentifier:
+		left, err = p.parseIdentifier(token)
+	case TokenLeftParen:
+		left, err = p.parseGrouping()
+	case TokenLeftBracket:
+		left, err = p.parseListLiteral()
+	case TokenLeftBrace:
+		left, err = p.parseDictLiteral()
+	case TokenOperator:
+		// Handle unary operators
+		if token.Value == "not" || token.Value == "+" || token.Value == "-" {
+			operand, err := p.parseExpression(operatorPrecedence[token.Value])
+			if err != nil {
+				return nil, err
+			}
+			left = &ExprNode{
+				Type:     NodeUnaryOp,
+				Operator: token.Value,
+				Children: []*ExprNode{operand},
+			}
+		} else {
+			return nil, fmt.Errorf("unexpected operator: %s", token.Value)
+		}
+	default:
+		return nil, fmt.Errorf("unexpected token: %s", token.Value)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	// Keep going while the current operator has a higher precedence
-	for p.position < len(p.tokens)-1 && p.tokens[p.position].Type == TokenOperator {
-		opToken := p.tokens[p.position]
-
-		// Special case for "is not" which is parsed as two separate tokens "is" and "not"
-		if opToken.Value == "is" && p.position+1 < len(p.tokens) &&
-			p.tokens[p.position+1].Type == TokenOperator && p.tokens[p.position+1].Value == "not" {
-			opToken.Value = "is not"
-			p.position++ // Skip the next token ("not")
-		}
-
-		opPrecedence, ok := operatorPrecedence[opToken.Value]
-		if !ok || opPrecedence < precedence {
+	// Handle postfix operators and infix operators
+	for p.pos < len(p.tokens) {
+		if p.pos >= len(p.tokens) {
 			break
 		}
 
-		// Consume the operator
-		p.position++
+		token = p.tokens[p.pos]
 
-		// Special case for unary operators like "not"
-		if opToken.Value == "not" {
-			// Create a unary operation node
-			node := &ExprNode{
-				Type:     NodeUnaryOp,
-				Operator: opToken.Value,
-				Children: []*ExprNode{left},
+		// Handle attribute access, subscript, or function call
+		if token.Type == TokenDot {
+			p.pos++
+			left, err = p.parseAttributeAccess(left)
+		} else if token.Type == TokenLeftBracket {
+			p.pos++
+			left, err = p.parseSubscriptAccess(left)
+		} else if token.Type == TokenLeftParen {
+			p.pos++
+			left, err = p.parseFunctionCall(left)
+		} else if token.Type == TokenOperator {
+			// Process binary operators based on precedence
+			opToken := token
+			opPrecedence, ok := operatorPrecedence[opToken.Value]
+			if !ok || opPrecedence < precedence {
+				break
 			}
-			left = node
-			continue
+
+			p.pos++ // Consume the operator
+
+			// Parse the right-hand side with higher precedence
+			right, err := p.parseExpression(opPrecedence + 1)
+			if err != nil {
+				return nil, err
+			}
+
+			left = &ExprNode{
+				Type:     NodeBinaryOp,
+				Operator: opToken.Value,
+				Children: []*ExprNode{left, right},
+			}
+		} else {
+			break
 		}
 
-		// Parse the right-hand side of the expression with higher precedence
-		right, err := p.parseExpression(opPrecedence + 1)
 		if err != nil {
 			return nil, err
-		}
-
-		// Create a binary operation node
-		left = &ExprNode{
-			Type:     NodeBinaryOp,
-			Operator: opToken.Value,
-			Children: []*ExprNode{left, right},
 		}
 	}
 
 	return left, nil
 }
 
-// parsePrimary parses primary expressions (literals, identifiers, parenthesized expressions)
-func (p *ExpressionParser) parsePrimary() (*ExprNode, error) {
-	if p.position >= len(p.tokens) {
-		return nil, fmt.Errorf("unexpected end of expression")
-	}
+// parseLiteral parses literal values
+func (p *ExprParser) parseLiteral(token Token) (*ExprNode, error) {
+	var value interface{}
+	var err error
 
-	token := p.tokens[p.position]
-	p.position++
-
-	switch token.Type {
-	case TokenLiteral:
-		// Parse literal values (strings, numbers, boolean, None)
-		var value interface{}
-		var err error
-
-		// Check for quoted strings
-		if (strings.HasPrefix(token.Value, "'") && strings.HasSuffix(token.Value, "'")) ||
-			(strings.HasPrefix(token.Value, "\"") && strings.HasSuffix(token.Value, "\"")) {
-			// Remove quotes and unescape
-			value = unescapeString(token.Value[1 : len(token.Value)-1])
-		} else if token.Value == "True" {
-			value = true
-		} else if token.Value == "False" {
-			value = false
-		} else if token.Value == "None" {
-			value = nil
+	// Check for quoted strings
+	if (strings.HasPrefix(token.Value, "'") && strings.HasSuffix(token.Value, "'")) ||
+		(strings.HasPrefix(token.Value, "\"") && strings.HasSuffix(token.Value, "\"")) {
+		// Remove quotes and unescape
+		value = unescapeStringLiteral(token.Value[1 : len(token.Value)-1])
+	} else if token.Value == "True" {
+		value = true
+	} else if token.Value == "False" {
+		value = false
+	} else if token.Value == "None" {
+		value = nil
+	} else {
+		// Try to parse as number
+		if strings.Contains(token.Value, ".") {
+			value, err = strconv.ParseFloat(token.Value, 64)
 		} else {
-			// Try to parse as number
-			if strings.Contains(token.Value, ".") {
-				value, err = strconv.ParseFloat(token.Value, 64)
-			} else {
-				value, err = strconv.Atoi(token.Value)
-			}
-
-			if err != nil {
-				return nil, fmt.Errorf("invalid literal: %s", token.Value)
-			}
+			value, err = strconv.Atoi(token.Value)
 		}
 
-		return &ExprNode{
-			Type:  NodeLiteral,
-			Value: value,
-		}, nil
-
-	case TokenIdentifier:
-		identifier := token.Value
-		node := &ExprNode{
-			Type:       NodeIdentifier,
-			Identifier: identifier,
-		}
-
-		// Check for attribute access (dot notation)
-		if p.position < len(p.tokens) && p.tokens[p.position].Type == TokenDot {
-			return p.parseAttributeAccess(node)
-		}
-
-		// Check for subscript access (dictionary/list lookup)
-		if p.position < len(p.tokens) && p.tokens[p.position].Type == TokenLeftBracket {
-			return p.parseSubscriptAccess(node)
-		}
-
-		// Check for function call
-		if p.position < len(p.tokens) && p.tokens[p.position].Type == TokenLeftParen {
-			return p.parseFunctionCall(node)
-		}
-
-		return node, nil
-
-	case TokenLeftParen:
-		// Parenthesized expression
-		expr, err := p.parseExpression(0)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid literal: %s", token.Value)
 		}
-
-		if p.position >= len(p.tokens) || p.tokens[p.position].Type != TokenRightParen {
-			return nil, fmt.Errorf("expected ')', found %s", p.tokens[p.position].Value)
-		}
-		p.position++ // Consume the right parenthesis
-
-		// Check for attribute access, subscript, or function call after parenthesized expr
-		if p.position < len(p.tokens) {
-			if p.tokens[p.position].Type == TokenDot {
-				return p.parseAttributeAccess(expr)
-			} else if p.tokens[p.position].Type == TokenLeftBracket {
-				return p.parseSubscriptAccess(expr)
-			} else if p.tokens[p.position].Type == TokenLeftParen {
-				return p.parseFunctionCall(expr)
-			}
-		}
-
-		return expr, nil
-
-	case TokenLeftBracket:
-		// List literal [item1, item2, ...]
-		return p.parseListLiteral()
-
-	case TokenLeftBrace:
-		// Dictionary literal {key: value, ...}
-		return p.parseDictLiteral()
-
-	case TokenOperator:
-		// Handle unary operators (like -1, not x)
-		if token.Value == "not" || token.Value == "+" || token.Value == "-" {
-			expr, err := p.parsePrimary()
-			if err != nil {
-				return nil, err
-			}
-			return &ExprNode{
-				Type:     NodeUnaryOp,
-				Operator: token.Value,
-				Children: []*ExprNode{expr},
-			}, nil
-		}
-		return nil, fmt.Errorf("unexpected operator: %s", token.Value)
-
-	default:
-		return nil, fmt.Errorf("unexpected token: %s", token.Value)
 	}
+
+	return &ExprNode{
+		Type:  NodeLiteral,
+		Value: value,
+	}, nil
+}
+
+// parseIdentifier parses an identifier
+func (p *ExprParser) parseIdentifier(token Token) (*ExprNode, error) {
+	return &ExprNode{
+		Type:       NodeIdentifier,
+		Identifier: token.Value,
+	}, nil
+}
+
+// parseGrouping parses a parenthesized expression
+func (p *ExprParser) parseGrouping() (*ExprNode, error) {
+	expr, err := p.parseExpression(0)
+	if err != nil {
+		return nil, err
+	}
+
+	if p.pos >= len(p.tokens) || p.tokens[p.pos].Type != TokenRightParen {
+		return nil, fmt.Errorf("expected ')'")
+	}
+	p.pos++ // Consume the right parenthesis
+
+	return expr, nil
 }
 
 // parseAttributeAccess parses an attribute access expression (obj.attr)
-func (p *ExpressionParser) parseAttributeAccess(left *ExprNode) (*ExprNode, error) {
-	p.position++ // Consume the dot
-
-	if p.position >= len(p.tokens) || p.tokens[p.position].Type != TokenIdentifier {
+func (p *ExprParser) parseAttributeAccess(left *ExprNode) (*ExprNode, error) {
+	if p.pos >= len(p.tokens) || p.tokens[p.pos].Type != TokenIdentifier {
 		return nil, fmt.Errorf("expected identifier after '.'")
 	}
 
-	attrName := p.tokens[p.position].Value
-	p.position++ // Consume the attribute name
+	attrName := p.tokens[p.pos].Value
+	p.pos++ // Consume the attribute name
 
-	node := &ExprNode{
+	return &ExprNode{
 		Type:       NodeAttribute,
 		Identifier: attrName,
 		Children:   []*ExprNode{left},
-	}
-
-	// Check for further attribute access, subscript, or function call
-	if p.position < len(p.tokens) {
-		if p.tokens[p.position].Type == TokenDot {
-			return p.parseAttributeAccess(node)
-		} else if p.tokens[p.position].Type == TokenLeftBracket {
-			return p.parseSubscriptAccess(node)
-		} else if p.tokens[p.position].Type == TokenLeftParen {
-			return p.parseFunctionCall(node)
-		}
-	}
-
-	return node, nil
+	}, nil
 }
 
 // parseSubscriptAccess parses a subscript access expression (obj[key])
-func (p *ExpressionParser) parseSubscriptAccess(left *ExprNode) (*ExprNode, error) {
-	p.position++ // Consume the left bracket
-
+func (p *ExprParser) parseSubscriptAccess(left *ExprNode) (*ExprNode, error) {
 	// Parse the key expression
 	keyExpr, err := p.parseExpression(0)
 	if err != nil {
 		return nil, err
 	}
 
-	if p.position >= len(p.tokens) || p.tokens[p.position].Type != TokenRightBracket {
+	if p.pos >= len(p.tokens) || p.tokens[p.pos].Type != TokenRightBracket {
 		return nil, fmt.Errorf("expected ']'")
 	}
-	p.position++ // Consume the right bracket
+	p.pos++ // Consume the right bracket
 
-	node := &ExprNode{
+	return &ExprNode{
 		Type:     NodeSubscript,
 		Children: []*ExprNode{left, keyExpr},
-	}
-
-	// Check for further attribute access, subscript, or function call
-	if p.position < len(p.tokens) {
-		if p.tokens[p.position].Type == TokenDot {
-			return p.parseAttributeAccess(node)
-		} else if p.tokens[p.position].Type == TokenLeftBracket {
-			return p.parseSubscriptAccess(node)
-		} else if p.tokens[p.position].Type == TokenLeftParen {
-			return p.parseFunctionCall(node)
-		}
-	}
-
-	return node, nil
+	}, nil
 }
 
 // parseFunctionCall parses a function call expression (func(arg1, arg2))
-func (p *ExpressionParser) parseFunctionCall(left *ExprNode) (*ExprNode, error) {
-	p.position++ // Consume the left parenthesis
-
+func (p *ExprParser) parseFunctionCall(left *ExprNode) (*ExprNode, error) {
 	var args []*ExprNode
 
 	// Check for empty argument list
-	if p.position < len(p.tokens) && p.tokens[p.position].Type == TokenRightParen {
-		p.position++ // Consume the right parenthesis
+	if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenRightParen {
+		p.pos++ // Consume the right parenthesis
 	} else {
 		// Parse arguments
 		for {
@@ -555,48 +561,35 @@ func (p *ExpressionParser) parseFunctionCall(left *ExprNode) (*ExprNode, error) 
 			}
 			args = append(args, arg)
 
-			if p.position >= len(p.tokens) {
+			if p.pos >= len(p.tokens) {
 				return nil, fmt.Errorf("unexpected end of expression, expected ')' or ','")
 			}
 
-			if p.tokens[p.position].Type == TokenRightParen {
-				p.position++ // Consume the right parenthesis
+			if p.tokens[p.pos].Type == TokenRightParen {
+				p.pos++ // Consume the right parenthesis
 				break
 			}
 
-			if p.tokens[p.position].Type != TokenComma {
-				return nil, fmt.Errorf("expected ',' or ')', found %s", p.tokens[p.position].Value)
+			if p.tokens[p.pos].Type != TokenComma {
+				return nil, fmt.Errorf("expected ',' or ')', found %s", p.tokens[p.pos].Value)
 			}
-			p.position++ // Consume the comma
+			p.pos++ // Consume the comma
 		}
 	}
 
-	node := &ExprNode{
+	return &ExprNode{
 		Type:     NodeFunctionCall,
 		Children: append([]*ExprNode{left}, args...),
-	}
-
-	// Check for further attribute access, subscript, or function call
-	if p.position < len(p.tokens) {
-		if p.tokens[p.position].Type == TokenDot {
-			return p.parseAttributeAccess(node)
-		} else if p.tokens[p.position].Type == TokenLeftBracket {
-			return p.parseSubscriptAccess(node)
-		} else if p.tokens[p.position].Type == TokenLeftParen {
-			return p.parseFunctionCall(node)
-		}
-	}
-
-	return node, nil
+	}, nil
 }
 
 // parseListLiteral parses a list literal expression [item1, item2, ...]
-func (p *ExpressionParser) parseListLiteral() (*ExprNode, error) {
+func (p *ExprParser) parseListLiteral() (*ExprNode, error) {
 	var items []*ExprNode
 
 	// Check for empty list
-	if p.position < len(p.tokens) && p.tokens[p.position].Type == TokenRightBracket {
-		p.position++ // Consume the right bracket
+	if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenRightBracket {
+		p.pos++ // Consume the right bracket
 		return &ExprNode{
 			Type:     NodeList,
 			Children: items,
@@ -611,19 +604,19 @@ func (p *ExpressionParser) parseListLiteral() (*ExprNode, error) {
 		}
 		items = append(items, item)
 
-		if p.position >= len(p.tokens) {
+		if p.pos >= len(p.tokens) {
 			return nil, fmt.Errorf("unexpected end of expression, expected ']' or ','")
 		}
 
-		if p.tokens[p.position].Type == TokenRightBracket {
-			p.position++ // Consume the right bracket
+		if p.tokens[p.pos].Type == TokenRightBracket {
+			p.pos++ // Consume the right bracket
 			break
 		}
 
-		if p.tokens[p.position].Type != TokenComma {
-			return nil, fmt.Errorf("expected ',' or ']', found %s", p.tokens[p.position].Value)
+		if p.tokens[p.pos].Type != TokenComma {
+			return nil, fmt.Errorf("expected ',' or ']', found %s", p.tokens[p.pos].Value)
 		}
-		p.position++ // Consume the comma
+		p.pos++ // Consume the comma
 	}
 
 	return &ExprNode{
@@ -633,12 +626,12 @@ func (p *ExpressionParser) parseListLiteral() (*ExprNode, error) {
 }
 
 // parseDictLiteral parses a dictionary literal expression {key: value, ...}
-func (p *ExpressionParser) parseDictLiteral() (*ExprNode, error) {
+func (p *ExprParser) parseDictLiteral() (*ExprNode, error) {
 	var keyValuePairs []*ExprNode
 
 	// Check for empty dictionary
-	if p.position < len(p.tokens) && p.tokens[p.position].Type == TokenRightBrace {
-		p.position++ // Consume the right brace
+	if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenRightBrace {
+		p.pos++ // Consume the right brace
 		return &ExprNode{
 			Type:     NodeDict,
 			Children: keyValuePairs,
@@ -653,10 +646,10 @@ func (p *ExpressionParser) parseDictLiteral() (*ExprNode, error) {
 			return nil, err
 		}
 
-		if p.position >= len(p.tokens) || p.tokens[p.position].Type != TokenColon {
+		if p.pos >= len(p.tokens) || p.tokens[p.pos].Type != TokenColon {
 			return nil, fmt.Errorf("expected ':' after dictionary key")
 		}
-		p.position++ // Consume the colon
+		p.pos++ // Consume the colon
 
 		// Parse value
 		value, err := p.parseExpression(0)
@@ -672,19 +665,19 @@ func (p *ExpressionParser) parseDictLiteral() (*ExprNode, error) {
 		}
 		keyValuePairs = append(keyValuePairs, pair)
 
-		if p.position >= len(p.tokens) {
+		if p.pos >= len(p.tokens) {
 			return nil, fmt.Errorf("unexpected end of expression, expected '}' or ','")
 		}
 
-		if p.tokens[p.position].Type == TokenRightBrace {
-			p.position++ // Consume the right brace
+		if p.tokens[p.pos].Type == TokenRightBrace {
+			p.pos++ // Consume the right brace
 			break
 		}
 
-		if p.tokens[p.position].Type != TokenComma {
-			return nil, fmt.Errorf("expected ',' or '}', found %s", p.tokens[p.position].Value)
+		if p.tokens[p.pos].Type != TokenComma {
+			return nil, fmt.Errorf("expected ',' or '}', found %s", p.tokens[p.pos].Value)
 		}
-		p.position++ // Consume the comma
+		p.pos++ // Consume the comma
 	}
 
 	return &ExprNode{
@@ -693,8 +686,18 @@ func (p *ExpressionParser) parseDictLiteral() (*ExprNode, error) {
 	}, nil
 }
 
-// evaluate computes the value of an AST node with context
-func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface{}) (interface{}, error) {
+// Evaluator evaluates an AST with a given context
+type Evaluator struct {
+	context map[string]interface{}
+}
+
+// NewEvaluator creates a new evaluator with a context
+func NewEvaluator(context map[string]interface{}) *Evaluator {
+	return &Evaluator{context: context}
+}
+
+// Evaluate evaluates an AST node with context
+func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 	if node == nil {
 		return nil, fmt.Errorf("cannot evaluate nil node")
 	}
@@ -704,7 +707,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 		return node.Value, nil
 
 	case NodeIdentifier:
-		value, exists := context[node.Identifier]
+		value, exists := e.context[node.Identifier]
 		if !exists {
 			return nil, fmt.Errorf("variable '%s' is undefined", node.Identifier)
 		}
@@ -715,7 +718,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 			return nil, fmt.Errorf("unary operator '%s' requires exactly one operand", node.Operator)
 		}
 
-		operand, err := p.evaluate(node.Children[0], context)
+		operand, err := e.Evaluate(node.Children[0])
 		if err != nil {
 			return nil, err
 		}
@@ -739,7 +742,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 		}
 
 		// Get the left operand
-		left, err := p.evaluate(node.Children[0], context)
+		left, err := e.Evaluate(node.Children[0])
 		if err != nil {
 			return nil, err
 		}
@@ -756,7 +759,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 		}
 
 		// Get the right operand
-		right, err := p.evaluate(node.Children[1], context)
+		right, err := e.Evaluate(node.Children[1])
 		if err != nil {
 			return nil, err
 		}
@@ -840,7 +843,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 			return nil, fmt.Errorf("attribute access requires an object")
 		}
 
-		obj, err := p.evaluate(node.Children[0], context)
+		obj, err := e.Evaluate(node.Children[0])
 		if err != nil {
 			return nil, err
 		}
@@ -852,12 +855,12 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 			return nil, fmt.Errorf("subscript access requires an object and key")
 		}
 
-		obj, err := p.evaluate(node.Children[0], context)
+		obj, err := e.Evaluate(node.Children[0])
 		if err != nil {
 			return nil, err
 		}
 
-		key, err := p.evaluate(node.Children[1], context)
+		key, err := e.Evaluate(node.Children[1])
 		if err != nil {
 			return nil, err
 		}
@@ -869,7 +872,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 			return nil, fmt.Errorf("function call requires a callable")
 		}
 
-		callable, err := p.evaluate(node.Children[0], context)
+		callable, err := e.Evaluate(node.Children[0])
 		if err != nil {
 			return nil, err
 		}
@@ -877,7 +880,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 		// Evaluate arguments
 		var args []interface{}
 		for i := 1; i < len(node.Children); i++ {
-			arg, err := p.evaluate(node.Children[i], context)
+			arg, err := e.Evaluate(node.Children[i])
 			if err != nil {
 				return nil, err
 			}
@@ -890,7 +893,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 		// Evaluate each item in the list
 		var items []interface{}
 		for _, child := range node.Children {
-			item, err := p.evaluate(child, context)
+			item, err := e.Evaluate(child)
 			if err != nil {
 				return nil, err
 			}
@@ -906,7 +909,7 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 				return nil, fmt.Errorf("invalid dictionary entry: expected key-value pair")
 			}
 
-			pair, err := p.evaluate(child, context)
+			pair, err := e.Evaluate(child)
 			if err != nil {
 				return nil, err
 			}
@@ -930,18 +933,23 @@ func (p *ExpressionParser) evaluate(node *ExprNode, context map[string]interface
 
 // ParseAndEvaluate parses and evaluates an expression string with context
 func ParseAndEvaluate(expr string, context map[string]interface{}) (interface{}, error) {
-	parser := NewExpressionParser(expr)
-
-	if err := parser.tokenize(); err != nil {
+	// Step 1: Tokenize the input
+	lexer := NewLexer(expr)
+	tokens, err := lexer.Tokenize()
+	if err != nil {
 		return nil, fmt.Errorf("lexical error: %v", err)
 	}
 
-	ast, err := parser.parse()
+	// Step 2: Parse tokens into AST
+	parser := NewExprParser(tokens)
+	ast, err := parser.Parse()
 	if err != nil {
 		return nil, fmt.Errorf("syntax error: %v", err)
 	}
 
-	result, err := parser.evaluate(ast, context)
+	// Step 3: Evaluate the AST
+	evaluator := NewEvaluator(context)
+	result, err := evaluator.Evaluate(ast)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation error: %v", err)
 	}
@@ -949,208 +957,25 @@ func ParseAndEvaluate(expr string, context map[string]interface{}) (interface{},
 	return result, nil
 }
 
-// evaluateCompoundExpression evaluates an expression and if needed follows multiple subscript operations
-// This is helpful for complex expressions like {'a':{'b':1}}['a']['b'] which are common in Jinja
+// unescapeString handles basic unescaping for string literals
+func unescapeStringLiteral(s string) string {
+	// Handle escaped characters
+	s = strings.ReplaceAll(s, "\\'", "'")   // Escaped single quote
+	s = strings.ReplaceAll(s, "\\\"", "\"") // Escaped double quote
+	s = strings.ReplaceAll(s, "\\\\", "\\") // Escaped backslash
+	s = strings.ReplaceAll(s, "\\n", "\n")  // Escaped newline
+	s = strings.ReplaceAll(s, "\\t", "\t")  // Escaped tab
+	s = strings.ReplaceAll(s, "\\r", "\r")  // Escaped carriage return
+	return s
+}
+
+// evaluateCompoundExpression evaluates an expression with potential compound operations
 func evaluateCompoundExpression(expr string, context map[string]interface{}) (interface{}, error) {
-	// Check if we need special handling for compound subscript expressions
-	if containsSubscript(expr) {
-		// Try the direct evaluation with the existing parser first
-		parser := NewExpressionParser(expr)
-		if err := parser.tokenize(); err != nil {
-			return nil, fmt.Errorf("lexical error: %v", err)
-		}
-
-		// For complex expressions like {'a': {'b': 1}}['a']['b'], we need to handle this specially
-		if (strings.HasPrefix(expr, "{") && strings.Contains(expr, "}[")) ||
-			(strings.HasPrefix(expr, "[") && strings.Contains(expr, "][")) {
-			return parseAndEvaluateCompoundExpression(expr, context)
-		}
-
-		// For simpler expressions, try normal parsing
-		result, err := ParseAndEvaluate(expr, context)
-		if err == nil {
-			return result, nil
-		}
-	}
-
-	// For expressions without compound operations, evaluate normally
+	// With our improved LALR parser, we can handle complex expressions directly
 	return ParseAndEvaluate(expr, context)
 }
 
 // containsSubscript checks if the expression contains subscript operations
 func containsSubscript(expr string) bool {
 	return strings.Contains(expr, "[") && strings.Contains(expr, "]")
-}
-
-// parseAndEvaluateCompoundExpression handles compound expressions that involve
-// literals with chained subscript access like {'a':{'b':1}}['a']['b']
-func parseAndEvaluateCompoundExpression(expr string, context map[string]interface{}) (interface{}, error) {
-	// First, find the base expression - either a dictionary or list literal
-	var baseLiteralEnd int
-	var baseValue interface{}
-	var err error
-
-	// Identify if we're dealing with a dict or list literal
-	if strings.HasPrefix(expr, "{") {
-		// Parse the dictionary literal
-		closeBracePos := findMatchingCloseBrace(expr, 0)
-		if closeBracePos == -1 {
-			return nil, fmt.Errorf("syntax error: unclosed dictionary literal")
-		}
-
-		dictLiteral := expr[:closeBracePos+1]
-		baseValue, err = ParseAndEvaluate(dictLiteral, context)
-		if err != nil {
-			return nil, err
-		}
-		baseLiteralEnd = closeBracePos + 1
-	} else if strings.HasPrefix(expr, "[") {
-		// Parse the list literal
-		closeBracketPos := findMatchingCloseBracket(expr, 0)
-		if closeBracketPos == -1 {
-			return nil, fmt.Errorf("syntax error: unclosed list literal")
-		}
-
-		listLiteral := expr[:closeBracketPos+1]
-		baseValue, err = ParseAndEvaluate(listLiteral, context)
-		if err != nil {
-			return nil, err
-		}
-		baseLiteralEnd = closeBracketPos + 1
-	} else {
-		// Not a compound literal expression
-		return ParseAndEvaluate(expr, context)
-	}
-
-	// Now handle the subscript operations
-	currentValue := baseValue
-	pos := baseLiteralEnd
-
-	for pos < len(expr) && expr[pos] == '[' {
-		closePos := findMatchingCloseBracket(expr, pos)
-		if closePos == -1 {
-			return nil, fmt.Errorf("syntax error: unclosed subscript at position %d", pos)
-		}
-
-		// Extract and evaluate the key/index
-		keyExpr := expr[pos+1 : closePos]
-		keyValue, err := ParseAndEvaluate(keyExpr, context)
-		if err != nil {
-			return nil, err
-		}
-
-		// Apply the subscript to the current value
-		switch v := currentValue.(type) {
-		case map[string]interface{}:
-			// Convert the key to a string for map access
-			key := fmt.Sprintf("%v", keyValue)
-			value, exists := v[key]
-			if !exists {
-				return nil, fmt.Errorf("key '%s' not found in map", key)
-			}
-			currentValue = value
-
-		case []interface{}:
-			// Convert the key to an integer for list access
-			index, err := toInteger(keyValue)
-			if err != nil {
-				return nil, fmt.Errorf("list index must be an integer, got %T", keyValue)
-			}
-
-			// Handle negative indices (Python-style)
-			if index < 0 {
-				index += len(v)
-			}
-
-			if index < 0 || index >= len(v) {
-				return nil, fmt.Errorf("list index out of range: %d", index)
-			}
-
-			currentValue = v[index]
-
-		default:
-			return nil, fmt.Errorf("cannot apply subscript to %T", currentValue)
-		}
-
-		// Move past this subscript
-		pos = closePos + 1
-	}
-
-	return currentValue, nil
-}
-
-// findMatchingCloseBrace finds the position of the matching closing brace for a
-// dictionary literal, handling nested structures and quoted strings
-func findMatchingCloseBrace(s string, startPos int) int {
-	braceCount := 0
-	inString := false
-	stringDelim := rune(0)
-
-	for i := startPos; i < len(s); i++ {
-		ch := rune(s[i])
-
-		// Handle string literals
-		if ch == '\'' || ch == '"' {
-			if !inString {
-				inString = true
-				stringDelim = ch
-			} else if ch == stringDelim {
-				inString = false
-			}
-			continue
-		}
-
-		if inString {
-			continue
-		}
-
-		if ch == '{' {
-			braceCount++
-		} else if ch == '}' {
-			braceCount--
-			if braceCount == 0 {
-				return i
-			}
-		}
-	}
-
-	return -1 // No matching brace found
-}
-
-// findMatchingCloseBracket finds the position of the matching closing bracket for a
-// list literal or subscript, handling nested structures and quoted strings
-func findMatchingCloseBracket(s string, startPos int) int {
-	bracketCount := 0
-	inString := false
-	stringDelim := rune(0)
-
-	for i := startPos; i < len(s); i++ {
-		ch := rune(s[i])
-
-		// Handle string literals
-		if ch == '\'' || ch == '"' {
-			if !inString {
-				inString = true
-				stringDelim = ch
-			} else if ch == stringDelim {
-				inString = false
-			}
-			continue
-		}
-
-		if inString {
-			continue
-		}
-
-		if ch == '[' {
-			bracketCount++
-		} else if ch == ']' {
-			bracketCount--
-			if bracketCount == 0 {
-				return i
-			}
-		}
-	}
-
-	return -1 // No matching bracket found
 }

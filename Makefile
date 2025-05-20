@@ -9,7 +9,7 @@ benchmark:
 # Run benchmarks and save as latest
 benchmark-save:
 	mkdir -p benchstat
-	go test ./pkg/ansiblejinja -bench=. -benchmem -count=3 > benchstat/latest.txt
+	go test ./pkg/ansiblejinja -bench=. -benchmem -count=3 | tee benchstat/latest.txt
 	@echo "Benchmark results saved to benchstat/latest.txt"
 
 # Compare with previous benchmark
