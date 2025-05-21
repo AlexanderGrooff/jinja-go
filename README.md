@@ -76,6 +76,9 @@ make benchmark-report
 
 # Run cross-language benchmarks against Python's Jinja2
 make cross-benchmark
+
+# Compare with other Go Jinja-like libraries (e.g., Pongo2)
+make golang-jinja-compare
 ```
 
 The repository uses [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat) to compare benchmark results, and pre-commit hooks automatically run benchmarks and compare with previous results.
@@ -121,6 +124,33 @@ The comparison provides insight into performance characteristics of both impleme
 - Tracking performance improvements over time
 
 You can view the [latest comparison report](benchstat/cross/comparison_report.txt) to see the current performance difference between the Go and Python implementations.
+
+### Go Implementation Comparisons
+
+You can compare this library with other Go-based Jinja-like templating libraries:
+
+```bash
+# Run comparison with other Go implementations
+make golang-jinja-compare
+```
+
+The comparison currently includes:
+- This library (jinja-go)
+- Pongo2 (github.com/flosch/pongo2)
+
+The tools are extensible, making it easy to add more libraries for comparison. See the [benchmarking README](cmd/benchmark/README.md) for detailed instructions on how to:
+- Add custom templates for more targeted testing
+- Add more templating libraries to the comparison
+- Customize benchmark parameters
+- Interpret benchmark results
+
+The comparison allows us to:
+- Identify performance advantages and disadvantages compared to other implementations
+- Learn from other libraries' optimizations
+- Make informed decisions about performance tradeoffs
+- Track progress as we continue to optimize this library
+
+You can view the [latest Go comparison report](benchstat/golang-compare/comparison_report.txt) to see the current performance comparison between different Go implementations.
 
 ## Implementation Status
 

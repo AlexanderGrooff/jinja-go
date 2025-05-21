@@ -1,4 +1,4 @@
-.PHONY: test benchmark benchmark-save benchmark-compare benchmark-report cross-benchmark
+.PHONY: test benchmark benchmark-save benchmark-compare benchmark-report cross-benchmark golang-jinja-compare
 
 test:
 	go test ./
@@ -61,4 +61,13 @@ benchmark-report:
 cross-benchmark:
 	@echo "Running cross-language benchmarks..."
 	@cmd/benchmark/run_benchmarks.sh --output-dir benchstat/cross
-	@echo "Cross-language benchmark report saved to benchstat/cross/comparison_report.txt" 
+	@echo "Cross-language benchmark report saved to benchstat/cross/comparison_report.txt"
+
+# Compare this library with other Golang Jinja template libraries
+golang-jinja-compare:
+	@echo "Comparing with other Golang Jinja implementations..."
+	@# Make sure pongo2 dependencies are properly set up in its own module
+	@cd cmd/benchmark/pongo2_benchmark && go mod tidy
+	@# Run the comparison benchmark
+	@cmd/benchmark/run_benchmarks.sh --output-dir benchstat/golang-compare
+	@echo "Comparison report saved to benchstat/golang-compare/comparison_report.txt" 
