@@ -4,29 +4,67 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 )
+
+// TemplateCache is a thread-safe cache for parsed templates
+type TemplateCache struct {
+	cache map[string][]*Node
+	mu    sync.RWMutex
+}
+
+// NewTemplateCache creates a new template cache
+func NewTemplateCache() *TemplateCache {
+	return &TemplateCache{
+		cache: make(map[string][]*Node),
+	}
+}
+
+// Get retrieves parsed nodes for a template from the cache
+func (tc *TemplateCache) Get(template string) ([]*Node, bool) {
+	tc.mu.RLock()
+	defer tc.mu.RUnlock()
+	nodes, ok := tc.cache[template]
+	return nodes, ok
+}
+
+// Set stores parsed nodes for a template in the cache
+func (tc *TemplateCache) Set(template string, nodes []*Node) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	tc.cache[template] = nodes
+}
+
+// Global template cache
+var defaultTemplateCache = NewTemplateCache()
 
 // TemplateString renders a template string using the provided context.
 // It processes Jinja-like expressions {{ ... }}, comments {# ... #}, and control tags {% ... %}.
 func TemplateString(template string, context map[string]interface{}) (string, error) {
-	p := NewParser(template)
-	var allNodes []*Node
-
-	// First pass: Parse the entire template into a sequence of nodes.
-	for {
-		node, parseErr := p.ParseNext() // ParseNext now populates node.Control for control tags
-		if parseErr != nil {
-			// If ParseNext itself returns an error (e.g., for syntax errors it can detect)
-			return "", fmt.Errorf("parsing error: %v", parseErr)
+	// Check if this template is already cached
+	nodes, found := defaultTemplateCache.Get(template)
+	if !found {
+		// Parse the template
+		parser := NewParser(template)
+		var err error
+		nodes, err = parser.ParseAll()
+		if err != nil {
+			return "", fmt.Errorf("template parsing error: %w", err)
 		}
-		if node == nil { // EOF
-			break
-		}
-		allNodes = append(allNodes, node)
+		// Cache the parsed nodes
+		defaultTemplateCache.Set(template, nodes)
 	}
 
-	// Second pass: Process the nodes, handling control flow.
-	return processNodes(allNodes, context)
+	// Render the template
+	var sb strings.Builder
+
+	// Handle control flow (if, for, etc.)
+	err := renderNodes(nodes, context, &sb)
+	if err != nil {
+		return "", fmt.Errorf("template rendering error: %w", err)
+	}
+
+	return sb.String(), nil
 }
 
 // processNodes recursively processes a slice of nodes, handling control flow like {% if %}.
@@ -425,4 +463,31 @@ func evaluateExpressionWithDotNotation(expr string, context map[string]interface
 
 	// If no dot notation was found, just evaluate normally
 	return ParseAndEvaluate(expr, context)
+}
+
+// ParseAll parses the entire template into a slice of nodes.
+func (p *Parser) ParseAll() ([]*Node, error) {
+	var nodes []*Node
+	for {
+		node, err := p.ParseNext()
+		if err != nil {
+			return nil, err
+		}
+		if node == nil {
+			break // End of template
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
+}
+
+// renderNodes processes a slice of nodes and writes the result to the given strings.Builder.
+func renderNodes(nodes []*Node, context map[string]interface{}, sb *strings.Builder) error {
+	result, err := processNodes(nodes, context)
+	if err != nil {
+		return err
+	}
+
+	sb.WriteString(result)
+	return nil
 }

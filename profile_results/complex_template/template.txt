@@ -1,0 +1,2 @@
+{% for user in users %}Name: {{ user.name }}, Age: {{ user.age }}{% if not loop.last %}
+{% endif %}{% endfor %}

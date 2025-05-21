@@ -76,16 +76,49 @@ make benchmark-report
 
 # Run cross-language benchmarks against Python's Jinja2
 make cross-benchmark
-
-# Compare with other Go Jinja-like libraries (e.g., Pongo2)
-make golang-jinja-compare
 ```
 
 The repository uses [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat) to compare benchmark results, and pre-commit hooks automatically run benchmarks and compare with previous results.
 
+## Profiling
+
+In addition to benchmarking, the library includes profiling tools to identify performance bottlenecks and optimize critical sections of code.
+
+### Quick Start
+
+```bash
+# Profile the complex_template with CPU, memory, and block profiling
+make profile-complex
+
+# Profile nested_loops template (one of the most performance-critical patterns)
+make profile-nested-loops
+
+# Profile all templates from the benchmark suite
+make profile-all
+
+# Run custom profiling
+make profile ARGS="--template conditional --cpu --iterations 5000"
+```
+
+### Analyzing Profiles
+
+After running a profile, analyze the results:
+
+```bash
+# Web-based visualization (most comprehensive)
+go tool pprof -http=:8080 profile_results/complex_template/cpu.prof
+
+# Text-based analysis
+go tool pprof profile_results/template_name/cpu.prof
+(pprof) top10                # Show top 10 functions by CPU usage
+(pprof) list TemplateString  # Show time spent in function
+```
+
+For more detailed information on profiling and performance optimization guidelines, see [performance.md](performance.md).
+
 ### Cross-Language Benchmarks
 
-You can directly compare this Go implementation against Python's Jinja2 using the cross-language benchmarking tools:
+You can directly compare this Go implementation against Python's Jinja2 and other Go-based Jinja-like libraries (such as Pongo2) using the cross-language benchmarking tools:
 
 ```bash
 # Run with default settings
@@ -100,9 +133,9 @@ make cross-benchmark
 
 The cross-benchmark tool:
 
-1. Runs identical templates through both the Go and Python implementations
+1. Runs identical templates through both the Python and Go implementations (including other Go libraries like Pongo2)
 2. Measures rendering time for each template
-3. Calculates the speed difference (how many times faster Go is)
+3. Calculates the speed difference between implementations
 4. Generates a detailed comparison report
 
 Custom template test cases can be defined in a JSON file following this format:
@@ -123,34 +156,7 @@ The comparison provides insight into performance characteristics of both impleme
 - Quantifying performance gains for various template features
 - Tracking performance improvements over time
 
-You can view the [latest comparison report](benchstat/cross/comparison_report.txt) to see the current performance difference between the Go and Python implementations.
-
-### Go Implementation Comparisons
-
-You can compare this library with other Go-based Jinja-like templating libraries:
-
-```bash
-# Run comparison with other Go implementations
-make golang-jinja-compare
-```
-
-The comparison currently includes:
-- This library (jinja-go)
-- Pongo2 (github.com/flosch/pongo2)
-
-The tools are extensible, making it easy to add more libraries for comparison. See the [benchmarking README](cmd/benchmark/README.md) for detailed instructions on how to:
-- Add custom templates for more targeted testing
-- Add more templating libraries to the comparison
-- Customize benchmark parameters
-- Interpret benchmark results
-
-The comparison allows us to:
-- Identify performance advantages and disadvantages compared to other implementations
-- Learn from other libraries' optimizations
-- Make informed decisions about performance tradeoffs
-- Track progress as we continue to optimize this library
-
-You can view the [latest Go comparison report](benchstat/golang-compare/comparison_report.txt) to see the current performance comparison between different Go implementations.
+You can view the [latest comparison report](benchstat/cross/comparison_report.txt) to see the current performance differences between all implementations.
 
 ## Implementation Status
 

@@ -1,4 +1,4 @@
-.PHONY: test benchmark benchmark-save benchmark-compare benchmark-report cross-benchmark golang-jinja-compare
+.PHONY: test benchmark benchmark-save benchmark-compare benchmark-report cross-benchmark profile profile-complex profile-all
 
 test:
 	go test ./
@@ -63,11 +63,26 @@ cross-benchmark:
 	@cmd/benchmark/run_benchmarks.sh --output-dir benchstat/cross
 	@echo "Cross-language benchmark report saved to benchstat/cross/comparison_report.txt"
 
-# Compare this library with other Golang Jinja template libraries
-golang-jinja-compare:
-	@echo "Comparing with other Golang Jinja implementations..."
-	@# Make sure pongo2 dependencies are properly set up in its own module
-	@cd cmd/benchmark/pongo2_benchmark && go mod tidy
-	@# Run the comparison benchmark
-	@cmd/benchmark/run_benchmarks.sh --output-dir benchstat/golang-compare
-	@echo "Comparison report saved to benchstat/golang-compare/comparison_report.txt" 
+# Run profiling for a complex template
+profile-complex:
+	@echo "Running profiling for complex_template..."
+	@chmod +x cmd/profile/profile.sh
+	@cmd/profile/profile.sh --template complex_template --all
+
+# Run profiling for nested_loops template
+profile-nested-loops:
+	@echo "Running profiling for nested_loops..."
+	@chmod +x cmd/profile/profile.sh
+	@cmd/profile/profile.sh --template nested_loops --all
+
+# Run profiling for all templates
+profile-all:
+	@echo "Running profiling for all templates..."
+	@chmod +x cmd/profile/profile.sh
+	@cmd/profile/profile.sh --all-templates --all
+
+# Run profiling with custom options
+profile:
+	@echo "Running custom profiling..."
+	@chmod +x cmd/profile/profile.sh
+	@cmd/profile/profile.sh $(ARGS) 

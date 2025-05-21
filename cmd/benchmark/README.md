@@ -17,14 +17,11 @@ This separation prevents benchmark dependencies from polluting the main project'
 
 ## Running Benchmarks
 
-You can run the benchmarks using the Makefile commands:
+You can run the benchmarks using the Makefile command:
 
 ```bash
-# Compare with Python's Jinja2
+# Compare with Python's Jinja2 and other Go template libraries
 make cross-benchmark
-
-# Compare with other Go template libraries
-make golang-jinja-compare
 ```
 
 Or directly using the benchmark script:

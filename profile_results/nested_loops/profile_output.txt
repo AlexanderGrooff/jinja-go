@@ -1,0 +1,7 @@
+CPU profiling enabled, writing to profile_results/nested_loops/cpu.prof
+Rendering template 10000 times
+Result length: 188
+Time taken: 188.798472ms
+Average time per iteration: 18.879µs
+Memory profile written to profile_results/nested_loops/mem.prof
+Block profile written to profile_results/nested_loops/block.prof
