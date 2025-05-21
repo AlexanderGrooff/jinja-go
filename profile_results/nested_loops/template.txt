@@ -1,4 +1,0 @@
-{% for department in company.departments %}Department: {{ department.name }}
-{% for employee in department.employees %}  - {{ employee.name }} ({{ employee.position }}){% if not loop.last %}
-{% endif %}{% endfor %}{% if not loop.last %}
-{% endif %}{% endfor %}

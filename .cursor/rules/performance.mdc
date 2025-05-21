@@ -5,4 +5,53 @@ alwaysApply: true
 ---
 Performance of this library is critical. Always ensure that the speed of the Jinja templating engine is as fast as possible.
 
-You can use the benchmark commands available in [Makefile](mdc:Makefile) to start and compare benchmarks.
+## Benchmarking
+
+Use the benchmark commands available in the Makefile to measure and compare performance:
+
+```bash
+# Run all benchmarks
+make benchmark
+
+# Run benchmarks and save results for comparison
+make benchmark-save
+
+# Compare with previous benchmark results
+make benchmark-compare
+
+# Generate a benchmark report
+make benchmark-report
+
+# Compare with Python's Jinja2 implementation
+make cross-benchmark
+```
+
+## Profiling
+
+The library includes a profiling tool to identify performance bottlenecks:
+
+### Quick Start
+
+```bash
+# Profile all templates from the benchmark suite
+make profile-all
+
+# Run custom profiling
+make profile ARGS="--template conditional --cpu --iterations 5000"
+```
+
+### Manual Profiling
+
+You can run the profiler directly for more control:
+
+```bash
+# Build the profiler
+go build -o profile_tool cmd/profile/main.go
+
+# Run with custom options
+./profile_tool --template-string="{{greeting}}, {{name}}!" \
+  --context='{"greeting":"Hello","name":"World"}' \
+  --iterations=10000 \
+  --cpuprofile="cpu.prof" \
+  --memprofile="mem.prof"
+```

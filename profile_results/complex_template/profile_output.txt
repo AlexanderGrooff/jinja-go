@@ -1,7 +1,0 @@
-CPU profiling enabled, writing to profile_results/complex_template/cpu.prof
-Rendering template 10000 times
-Result length: 62
-Time taken: 85.973846ms
-Average time per iteration: 8.597µs
-Memory profile written to profile_results/complex_template/mem.prof
-Block profile written to profile_results/complex_template/block.prof

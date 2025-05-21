@@ -16,3 +16,6 @@ jinja-go
 
 # Direnv
 .direnv/ 
+
+# Profile results
+profile_results/

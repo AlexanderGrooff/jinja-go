@@ -130,7 +130,13 @@ func NewLexer(input string) *Lexer {
 
 // Tokenize breaks the input string into tokens
 func (l *Lexer) Tokenize() ([]Token, error) {
-	l.tokens = []Token{}
+	// Estimate token capacity - a good approximation is one token per 3-4 characters on average
+	estimatedCapacity := len(l.input) / 3
+	if estimatedCapacity < 8 {
+		estimatedCapacity = 8 // Minimum initial capacity
+	}
+
+	l.tokens = make([]Token, 0, estimatedCapacity)
 	l.pos = 0
 	input := strings.TrimSpace(l.input)
 
@@ -259,18 +265,44 @@ func (l *Lexer) tokenizeNumber() {
 // tryTokenizeOperator attempts to tokenize an operator
 func (l *Lexer) tryTokenizeOperator() bool {
 	// Try special operators first
-	if l.pos+6 <= len(l.input) && l.input[l.pos:l.pos+6] == "not in" {
-		l.addToken(TokenOperator, "not in")
-		return true
-	}
+	if l.pos+6 <= len(l.input) {
+		// Check for "not in" and "is not" without allocating substrings when possible
+		if l.input[l.pos] == 'n' && l.input[l.pos+1] == 'o' && l.input[l.pos+2] == 't' &&
+			l.input[l.pos+3] == ' ' && l.input[l.pos+4] == 'i' && l.input[l.pos+5] == 'n' {
+			// Match for "not in"
+			l.addToken(TokenOperator, "not in")
+			return true
+		}
 
-	if l.pos+6 <= len(l.input) && l.input[l.pos:l.pos+6] == "is not" {
-		l.addToken(TokenOperator, "is not")
-		return true
+		if l.input[l.pos] == 'i' && l.input[l.pos+1] == 's' && l.input[l.pos+2] == ' ' &&
+			l.input[l.pos+3] == 'n' && l.input[l.pos+4] == 'o' && l.input[l.pos+5] == 't' {
+			// Match for "is not"
+			l.addToken(TokenOperator, "is not")
+			return true
+		}
 	}
 
 	// Try two-character operators
 	if l.pos+2 <= len(l.input) {
+		// Inline common two-character operators for faster matching
+		if l.input[l.pos] == '=' && l.input[l.pos+1] == '=' {
+			l.addToken(TokenOperator, "==")
+			return true
+		}
+		if l.input[l.pos] == '!' && l.input[l.pos+1] == '=' {
+			l.addToken(TokenOperator, "!=")
+			return true
+		}
+		if l.input[l.pos] == '>' && l.input[l.pos+1] == '=' {
+			l.addToken(TokenOperator, ">=")
+			return true
+		}
+		if l.input[l.pos] == '<' && l.input[l.pos+1] == '=' {
+			l.addToken(TokenOperator, "<=")
+			return true
+		}
+
+		// For less common operators, check the map
 		twoChars := l.input[l.pos : l.pos+2]
 		if _, found := operators[twoChars]; found {
 			l.addToken(TokenOperator, twoChars)
@@ -278,17 +310,26 @@ func (l *Lexer) tryTokenizeOperator() bool {
 		}
 	}
 
-	// Try "is" operator
-	if l.pos+2 <= len(l.input) && l.input[l.pos:l.pos+2] == "is" &&
-		(l.pos+2 >= len(l.input) || !isAlpha(l.input[l.pos+2])) {
+	// Try "is" operator - special case since it can be part of "is not"
+	if l.pos+2 <= len(l.input) && l.input[l.pos] == 'i' && l.input[l.pos+1] == 's' &&
+		(l.pos+2 >= len(l.input) || !isAlphaNumeric(l.input[l.pos+2])) {
 		l.addToken(TokenOperator, "is")
 		return true
 	}
 
-	// Try single-character operators
-	if _, found := operators[string(l.input[l.pos])]; found {
-		l.addToken(TokenOperator, string(l.input[l.pos]))
-		return true
+	// Try single-character operators - inline common ones for performance
+	if l.pos < len(l.input) {
+		c := l.input[l.pos]
+		if c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>' {
+			l.addToken(TokenOperator, string(c))
+			return true
+		}
+
+		// For less common operators, check the map
+		if _, found := operators[string(c)]; found {
+			l.addToken(TokenOperator, string(c))
+			return true
+		}
 	}
 
 	return false
@@ -701,16 +742,15 @@ type Evaluator struct {
 func NewEvaluator(context map[string]interface{}) *Evaluator {
 	// Create a new context map that includes the original context values
 	// and adds any global functions
-	mergedContext := make(map[string]interface{})
+	mergedContext := make(map[string]interface{}, len(context)+len(GlobalFunctions))
 
 	// Copy all values from the original context
 	for k, v := range context {
 		mergedContext[k] = v
 	}
 
-	// Add global functions to the context
+	// Add global functions to the context - only if they don't already exist
 	for name, fn := range GlobalFunctions {
-		// Don't override existing context values
 		if _, exists := mergedContext[name]; !exists {
 			mergedContext[name] = fn
 		}
@@ -946,6 +986,9 @@ func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
 		return nil, fmt.Errorf("function call node missing function identifier")
 	}
 
+	// Prepare arguments capacity for better performance
+	argsLen := len(node.Children) - 1
+
 	// Handle two cases:
 	// 1. Direct function call: function(arg1, arg2)
 	// 2. Method call on an object: object.method(arg1, arg2)
@@ -968,8 +1011,14 @@ func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
 			return nil, fmt.Errorf("'%s' is not a callable function", funcName)
 		}
 
-		// Evaluate all arguments
-		args := make([]interface{}, 0, len(node.Children)-1)
+		// Only allocate if we have arguments
+		if argsLen == 0 {
+			// No args, direct call
+			return funcTyped()
+		}
+
+		// Evaluate all arguments with preallocated slice
+		args := make([]interface{}, 0, argsLen)
 		for i := 1; i < len(node.Children); i++ {
 			argValue, err := e.Evaluate(node.Children[i])
 			if err != nil {
@@ -1003,8 +1052,76 @@ func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
 		// Get the method name
 		methodName := funcNode.Identifier
 
-		// Evaluate all arguments
-		args := make([]interface{}, 0, len(node.Children))
+		// Fast path for common map methods
+		if mapObj, isMap := obj.(map[string]interface{}); isMap {
+			if methodName == "get" && len(node.Children) > 1 {
+				key, err := e.Evaluate(node.Children[1])
+				if err != nil {
+					return nil, err
+				}
+
+				keyStr, ok := key.(string)
+				if !ok {
+					keyStr = fmt.Sprintf("%v", key)
+				}
+
+				if val, exists := mapObj[keyStr]; exists {
+					return val, nil
+				} else if len(node.Children) > 2 {
+					// With default value
+					defaultVal, err := e.Evaluate(node.Children[2])
+					if err != nil {
+						return nil, err
+					}
+					return defaultVal, nil
+				}
+				return nil, nil
+			}
+		}
+
+		// Determine the type of object to find appropriate method
+		var methodFunc FunctionFunc
+		var methodFound bool
+
+		// Check object type for known method handlers without using reflection when possible
+		switch obj.(type) {
+		case map[string]interface{}:
+			// It's a string map
+			if mapMethods, ok := GlobalMethods["map"]; ok {
+				methodFunc, methodFound = mapMethods[methodName]
+			}
+		case map[interface{}]interface{}:
+			// It's an interface map
+			if mapMethods, ok := GlobalMethods["map"]; ok {
+				methodFunc, methodFound = mapMethods[methodName]
+			}
+		case []interface{}:
+			// It's a slice (list)
+			if listMethods, ok := GlobalMethods["slice"]; ok {
+				methodFunc, methodFound = listMethods[methodName]
+			}
+		case string:
+			// It's a string
+			if strMethods, ok := GlobalMethods["string"]; ok {
+				methodFunc, methodFound = strMethods[methodName]
+			}
+		default:
+			// Use reflection as last resort for unknown types
+			t := reflect.TypeOf(obj)
+			if t != nil {
+				typeName := t.String()
+				if methods, ok := GlobalMethods[typeName]; ok {
+					methodFunc, methodFound = methods[methodName]
+				}
+			}
+		}
+
+		if !methodFound || methodFunc == nil {
+			return nil, fmt.Errorf("method '%s' is not defined for object type %T", methodName, obj)
+		}
+
+		// Prepare args with preallocated capacity
+		args := make([]interface{}, 0, argsLen+1) // +1 for the object itself
 
 		// The first argument is the object itself (like 'self' in Python)
 		args = append(args, obj)
@@ -1016,35 +1133,6 @@ func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
 				return nil, fmt.Errorf("error evaluating argument %d for method '%s': %v", i, methodName, err)
 			}
 			args = append(args, argValue)
-		}
-
-		// Determine the type of object to find appropriate method
-		var methodFunc FunctionFunc
-
-		// Check object type and find corresponding method
-		switch obj.(type) {
-		case map[string]interface{}, map[interface{}]interface{}:
-			// It's a map/dictionary type
-			if mapMethods, ok := GlobalMethods["map"]; ok {
-				if method, ok := mapMethods[methodName]; ok {
-					methodFunc = method
-				}
-			}
-		default:
-			// Use reflection to get the type name
-			t := reflect.TypeOf(obj)
-			if t != nil {
-				typeName := t.String()
-				if methods, ok := GlobalMethods[typeName]; ok {
-					if method, ok := methods[methodName]; ok {
-						methodFunc = method
-					}
-				}
-			}
-		}
-
-		if methodFunc == nil {
-			return nil, fmt.Errorf("method '%s' is not defined for object type %T", methodName, obj)
 		}
 
 		// Call the method with the object as first argument
@@ -1085,16 +1173,46 @@ func ParseAndEvaluate(expr string, context map[string]interface{}) (interface{},
 	return result, nil
 }
 
-// unescapeString handles basic unescaping for string literals
+// unescapeString handles basic unescaping for string literals efficiently
 func unescapeStringLiteral(s string) string {
-	// Handle escaped characters
-	s = strings.ReplaceAll(s, "\\'", "'")   // Escaped single quote
-	s = strings.ReplaceAll(s, "\\\"", "\"") // Escaped double quote
-	s = strings.ReplaceAll(s, "\\\\", "\\") // Escaped backslash
-	s = strings.ReplaceAll(s, "\\n", "\n")  // Escaped newline
-	s = strings.ReplaceAll(s, "\\t", "\t")  // Escaped tab
-	s = strings.ReplaceAll(s, "\\r", "\r")  // Escaped carriage return
-	return s
+	// Quick path: if no escape characters, return the original string
+	if !strings.Contains(s, "\\") {
+		return s
+	}
+
+	// Allocate a builder with estimated capacity for the unescaped string
+	var b strings.Builder
+	b.Grow(len(s))
+
+	// Iterate through the string, handling escape sequences
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			// Process escape sequence
+			switch s[i+1] {
+			case '\'':
+				b.WriteByte('\'')
+			case '"':
+				b.WriteByte('"')
+			case '\\':
+				b.WriteByte('\\')
+			case 'n':
+				b.WriteByte('\n')
+			case 't':
+				b.WriteByte('\t')
+			case 'r':
+				b.WriteByte('\r')
+			default:
+				// Unknown escape sequence, keep the backslash and the character
+				b.WriteByte('\\')
+				b.WriteByte(s[i+1])
+			}
+			i++ // Skip the escaped character
+		} else {
+			b.WriteByte(s[i])
+		}
+	}
+
+	return b.String()
 }
 
 // evaluateCompoundExpression evaluates an expression with potential compound operations
