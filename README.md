@@ -253,6 +253,10 @@ You can view the [latest comparison report](benchstat/cross/comparison_report.tx
 1. Handling of edge cases in string literals and escaping
 1. Better documentation of supported features
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ### Pre-commit Hooks
 
 The pre-commit hooks will:
