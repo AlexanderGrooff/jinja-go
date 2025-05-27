@@ -3,6 +3,7 @@ package jinja
 import (
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -2127,6 +2128,166 @@ func TestStringFormatMethod(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("TemplateString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseVariables(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		want     []string
+		wantErr  bool
+	}{
+		{
+			name:     "empty template",
+			template: "",
+			want:     []string{},
+			wantErr:  false,
+		},
+		{
+			name:     "no variables",
+			template: "Hello, world!",
+			want:     []string{},
+			wantErr:  false,
+		},
+		{
+			name:     "simple variable",
+			template: "Hello {{ name }}!",
+			want:     []string{"name"},
+			wantErr:  false,
+		},
+		{
+			name:     "multiple variables",
+			template: "{{ greeting }} {{ name }}!",
+			want:     []string{"greeting", "name"},
+			wantErr:  false,
+		},
+		{
+			name:     "dot notation",
+			template: "Hello {{ user.name }}!",
+			want:     []string{"user"},
+			wantErr:  false,
+		},
+		{
+			name:     "variable with filter",
+			template: "{{ item.name | default('name') }}",
+			want:     []string{"item"},
+			wantErr:  false,
+		},
+		{
+			name:     "multiple filters",
+			template: "{{ value | upper | default('N/A') }}",
+			want:     []string{"value"},
+			wantErr:  false,
+		},
+		{
+			name:     "subscript access",
+			template: "{{ items[0] }}",
+			want:     []string{"items"},
+			wantErr:  false,
+		},
+		{
+			name:     "variable in subscript",
+			template: "{{ items[index] }}",
+			want:     []string{"items", "index"},
+			wantErr:  false,
+		},
+		{
+			name:     "if statement",
+			template: "{% if user.active %}Active{% endif %}",
+			want:     []string{"user"},
+			wantErr:  false,
+		},
+		{
+			name:     "for loop",
+			template: "{% for item in items %}{{ item }}{% endfor %}",
+			want:     []string{"items", "item"},
+			wantErr:  false,
+		},
+		{
+			name:     "complex expression",
+			template: "{{ user.name if user.active else 'Guest' }}",
+			want:     []string{"user"},
+			wantErr:  false,
+		},
+		{
+			name:     "function call",
+			template: "{{ lookup('env', 'HOME') }}",
+			want:     []string{},
+			wantErr:  false,
+		},
+		{
+			name:     "function call with variable",
+			template: "{{ lookup('env', var_name) }}",
+			want:     []string{"var_name"},
+			wantErr:  false,
+		},
+		{
+			name:     "mixed content",
+			template: "Hello {{ name }}! {% if debug %}Debug: {{ value }}{% endif %}",
+			want:     []string{"name", "debug", "value"},
+			wantErr:  false,
+		},
+		{
+			name:     "comments ignored",
+			template: "{{ name }} {# this is a comment with {{ fake_var }} #}",
+			want:     []string{"name"},
+			wantErr:  false,
+		},
+		{
+			name:     "arithmetic expression",
+			template: "{{ count + 1 }}",
+			want:     []string{"count"},
+			wantErr:  false,
+		},
+		{
+			name:     "comparison expression",
+			template: "{{ age >= 18 }}",
+			want:     []string{"age"},
+			wantErr:  false,
+		},
+		{
+			name:     "logical expression",
+			template: "{{ user.active and user.verified }}",
+			want:     []string{"user"},
+			wantErr:  false,
+		},
+		{
+			name:     "nested attribute access",
+			template: "{{ user.profile.settings.theme }}",
+			want:     []string{"user"},
+			wantErr:  false,
+		},
+		{
+			name:     "list literal with variables",
+			template: "{{ [item1, item2, item3] }}",
+			want:     []string{"item1", "item2", "item3"},
+			wantErr:  false,
+		},
+		{
+			name:     "dict literal with variables",
+			template: "{{ {'key': value, 'name': user.name} }}",
+			want:     []string{"value", "user"},
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseVariables(tt.template)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseVariables() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			// Sort both slices for comparison since order doesn't matter
+			sort.Strings(got)
+			sort.Strings(tt.want)
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ParseVariables() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -321,3 +321,203 @@ func renderNodes(nodes []*Node, context map[string]interface{}, sb *strings.Buil
 	sb.WriteString(result)
 	return nil
 }
+
+// ParseVariables extracts all Jinja variable names from a template string.
+// It returns a slice of unique variable names found in expressions {{ ... }} and control tags {% ... %}.
+// For example, "some string with a {{ item.name | default('name') }}" returns ["item"].
+func ParseVariables(template string) ([]string, error) {
+	// Parse the template into nodes
+	parser := NewParser(template)
+	nodes, err := parser.ParseAll()
+	if err != nil {
+		return nil, fmt.Errorf("template parsing error: %w", err)
+	}
+
+	// Use a map to track unique variable names
+	variableSet := make(map[string]bool)
+
+	// Extract variables from all nodes
+	err = extractVariablesFromNodes(nodes, variableSet)
+	if err != nil {
+		return nil, fmt.Errorf("variable extraction error: %w", err)
+	}
+
+	// Convert map keys to slice
+	variables := make([]string, 0, len(variableSet))
+	for varName := range variableSet {
+		variables = append(variables, varName)
+	}
+
+	return variables, nil
+}
+
+// extractVariablesFromNodes recursively extracts variable names from a slice of nodes
+func extractVariablesFromNodes(nodes []*Node, variableSet map[string]bool) error {
+	for _, node := range nodes {
+		switch node.Type {
+		case NodeExpression:
+			// Extract variables from expression content
+			err := extractVariablesFromExpression(node.Content, variableSet)
+			if err != nil {
+				return fmt.Errorf("error extracting variables from expression '{{ %s }}': %v", node.Content, err)
+			}
+
+		case NodeControlTag:
+			if node.Control != nil {
+				// Extract variables from control tag expressions
+				switch node.Control.Type {
+				case ControlIf, ControlElseIf:
+					// Extract variables from if/elif condition
+					if node.Control.Expression != "" {
+						err := extractVariablesFromExpression(node.Control.Expression, variableSet)
+						if err != nil {
+							return fmt.Errorf("error extracting variables from control expression '%s': %v", node.Control.Expression, err)
+						}
+					}
+				case ControlFor:
+					// Extract variables from for loop expression
+					if node.Control.Expression != "" {
+						err := extractVariablesFromForExpression(node.Control.Expression, variableSet)
+						if err != nil {
+							return fmt.Errorf("error extracting variables from for expression '%s': %v", node.Control.Expression, err)
+						}
+					}
+				}
+			}
+
+		case NodeText, NodeComment:
+			// No variables to extract from text or comments
+			continue
+		}
+	}
+	return nil
+}
+
+// extractVariablesFromExpression extracts variable names from a Jinja expression string
+func extractVariablesFromExpression(expression string, variableSet map[string]bool) error {
+	trimmedExpr := strings.TrimSpace(expression)
+	if trimmedExpr == "" {
+		return nil
+	}
+
+	// Try to parse the expression using the LALR parser
+	lexer := NewLexer(trimmedExpr)
+	tokens, err := lexer.Tokenize()
+	if err != nil {
+		// If tokenization fails, fall back to simple regex-based extraction
+		return extractVariablesWithRegex(trimmedExpr, variableSet)
+	}
+
+	// Parse tokens into AST
+	parser := NewExprParser(tokens)
+	ast, err := parser.Parse()
+	if err != nil {
+		// If parsing fails, fall back to simple regex-based extraction
+		return extractVariablesWithRegex(trimmedExpr, variableSet)
+	}
+
+	// Extract variables from the AST
+	extractVariablesFromAST(ast, variableSet)
+	return nil
+}
+
+// extractVariablesFromAST recursively extracts variable names from an expression AST
+func extractVariablesFromAST(node *ExprNode, variableSet map[string]bool) {
+	if node == nil {
+		return
+	}
+
+	switch node.Type {
+	case NodeIdentifier:
+		// This is a variable reference - add the root variable name
+		variableSet[node.Identifier] = true
+
+	case NodeAttribute:
+		// For attribute access like "item.name", we want the root variable "item"
+		if len(node.Children) > 0 {
+			extractVariablesFromAST(node.Children[0], variableSet)
+		}
+
+	case NodeSubscript:
+		// For subscript access like "item[0]", we want the root variable "item"
+		if len(node.Children) > 0 {
+			extractVariablesFromAST(node.Children[0], variableSet)
+		}
+		// Also check the subscript expression for variables
+		if len(node.Children) > 1 {
+			extractVariablesFromAST(node.Children[1], variableSet)
+		}
+
+	case NodeFunctionCall:
+		// For function calls, extract variables from arguments only, not the function name
+		// The first child is the function name/identifier, skip it
+		// Extract variables from arguments (children[1:])
+		for i := 1; i < len(node.Children); i++ {
+			extractVariablesFromAST(node.Children[i], variableSet)
+		}
+
+	case NodeUnaryOp, NodeBinaryOp:
+		// For operators, extract variables from all operands
+		for _, child := range node.Children {
+			extractVariablesFromAST(child, variableSet)
+		}
+
+	case NodeList, NodeDict, NodeTuple:
+		// For collections, extract variables from all elements
+		for _, child := range node.Children {
+			extractVariablesFromAST(child, variableSet)
+		}
+
+	case NodeLiteral:
+		// Literals don't contain variables
+		return
+	}
+}
+
+// extractVariablesFromForExpression extracts variables from a for loop expression like "item in items"
+func extractVariablesFromForExpression(expression string, variableSet map[string]bool) error {
+	trimmedExpr := strings.TrimSpace(expression)
+
+	// For expressions have the format: "variable in iterable" or "key, value in dict"
+	// We want to extract the iterable part, not the loop variables
+	inIndex := strings.Index(trimmedExpr, " in ")
+	if inIndex == -1 {
+		// Invalid for expression, but try to extract any variables anyway
+		return extractVariablesFromExpression(trimmedExpr, variableSet)
+	}
+
+	// Extract the iterable part (after " in ")
+	iterablePart := strings.TrimSpace(trimmedExpr[inIndex+4:])
+	return extractVariablesFromExpression(iterablePart, variableSet)
+}
+
+// extractVariablesWithRegex is a fallback method that uses regex to extract variable names
+// when the LALR parser fails
+func extractVariablesWithRegex(expression string, variableSet map[string]bool) error {
+	// Remove filter expressions (everything after |)
+	if pipeIndex := strings.Index(expression, "|"); pipeIndex != -1 {
+		expression = strings.TrimSpace(expression[:pipeIndex])
+	}
+
+	// Simple regex to match identifiers (variable names)
+	// This matches sequences of letters, digits, and underscores that start with a letter or underscore
+	identifierPattern := regexp.MustCompile(`\b[a-zA-Z_][a-zA-Z0-9_]*\b`)
+	matches := identifierPattern.FindAllString(expression, -1)
+
+	for _, match := range matches {
+		// Skip common keywords and literals
+		switch match {
+		case "True", "False", "None", "true", "false", "none", "null",
+			"and", "or", "not", "in", "is", "if", "else", "elif", "for", "endfor", "endif":
+			continue
+		default:
+			// Extract the root variable name (before any dots)
+			if dotIndex := strings.Index(match, "."); dotIndex != -1 {
+				match = match[:dotIndex]
+			}
+			variableSet[match] = true
+		}
+	}
+
+	return nil
+}
