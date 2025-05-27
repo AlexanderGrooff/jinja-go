@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// isTruthy determines if a value is considered "truthy" in the Python/Jinja2 sense
-func isTruthy(value interface{}) bool {
+// IsTruthy determines if a value is considered "truthy" in the Python/Jinja2 sense
+func IsTruthy(value interface{}) bool {
 	if value == nil {
 		return false
 	}

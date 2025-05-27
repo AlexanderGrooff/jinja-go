@@ -788,7 +788,7 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 
 		switch node.Operator {
 		case "not":
-			return !isTruthy(operand), nil
+			return !IsTruthy(operand), nil
 		case "+":
 			// Unary plus - most types remain unchanged
 			return operand, nil
@@ -812,11 +812,11 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 
 		// Short-circuit evaluation for 'and' and 'or'
 		if node.Operator == "and" {
-			if !isTruthy(left) {
+			if !IsTruthy(left) {
 				return left, nil
 			}
 		} else if node.Operator == "or" {
-			if isTruthy(left) {
+			if IsTruthy(left) {
 				return left, nil
 			}
 		}

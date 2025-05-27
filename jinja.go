@@ -362,7 +362,7 @@ func EvaluateExpression(expression string, context map[string]interface{}) (inte
 				val, err := evaluateDotNotation(varName, context)
 				if err == nil && val != nil {
 					// Apply 'not' operator to the result
-					return !isTruthy(val), nil
+					return !IsTruthy(val), nil
 				}
 			}
 		}

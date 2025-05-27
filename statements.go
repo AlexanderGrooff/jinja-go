@@ -77,7 +77,7 @@ func handleIfStatement(
 				if evalErr != nil {
 					return "", currentIndex, fmt.Errorf("error evaluating condition for %s '%s': %v", branchType, branchExpression, evalErr)
 				}
-				truthy := isTruthy(conditionResult)
+				truthy := IsTruthy(conditionResult)
 
 				if truthy {
 					processedContent, err := processBlockNodesFunc(bodyNodes, context)
