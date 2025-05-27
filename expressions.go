@@ -1215,17 +1215,6 @@ func unescapeStringLiteral(s string) string {
 	return b.String()
 }
 
-// evaluateCompoundExpression evaluates an expression with potential compound operations
-func evaluateCompoundExpression(expr string, context map[string]interface{}) (interface{}, error) {
-	// With our improved LALR parser, we can handle complex expressions directly
-	return ParseAndEvaluate(expr, context)
-}
-
-// containsSubscript checks if the expression contains subscript operations
-func containsSubscript(expr string) bool {
-	return strings.Contains(expr, "[") && strings.Contains(expr, "]")
-}
-
 // evaluateDotNotation handles parsing and evaluation of dot notation expressions like 'user.name'
 // It takes a dot-notation string (e.g., "loop.index") and context, parses the parts,
 // and returns the value of the nested property

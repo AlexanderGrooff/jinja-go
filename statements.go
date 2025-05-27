@@ -290,7 +290,7 @@ func handleForStatement(
 	var evalErr error
 
 	// First try to evaluate as a compound expression for nested properties
-	collectionVal, evalErr = EvaluateCompoundExpression(collectionExpr, context)
+	collectionVal, evalErr = ParseAndEvaluate(collectionExpr, context)
 	if evalErr != nil {
 		// Fall back to simple evaluation
 		collectionVal, evalErr = evalExprFunc(collectionExpr, context)

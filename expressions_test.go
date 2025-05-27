@@ -586,9 +586,9 @@ func TestParseAndEvaluate(t *testing.T) {
 	}
 }
 
-// TestEvaluateCompoundExpression specifically tests complex nested expressions
+// TestParseAndEvaluateCompoundExpressions specifically tests complex nested expressions
 // that require multiple subscript operations
-func TestEvaluateCompoundExpression(t *testing.T) {
+func TestParseAndEvaluateCompoundExpressions(t *testing.T) {
 	tests := []struct {
 		name      string
 		expr      string
@@ -722,10 +722,10 @@ func TestEvaluateCompoundExpression(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := evaluateCompoundExpression(tt.expr, tt.context)
+			got, err := ParseAndEvaluate(tt.expr, tt.context)
 
 			if (err != nil) != tt.wantError {
-				t.Errorf("evaluateCompoundExpression() error = %v, wantError %v", err, tt.wantError)
+				t.Errorf("ParseAndEvaluate() error = %v, wantError %v", err, tt.wantError)
 				return
 			}
 
@@ -734,7 +734,7 @@ func TestEvaluateCompoundExpression(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("evaluateCompoundExpression() = %v (%T), want %v (%T)", got, got, tt.want, tt.want)
+				t.Errorf("ParseAndEvaluate() = %v (%T), want %v (%T)", got, got, tt.want, tt.want)
 			}
 		})
 	}

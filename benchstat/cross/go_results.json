@@ -1,50 +1,50 @@
 [
   {
     "name": "simple_variable",
-    "execution_time_ms": 0.0002681
+    "execution_time_ms": 0.00027099000000000003
   },
   {
     "name": "multiple_variables",
-    "execution_time_ms": 0.0007235200000000001
+    "execution_time_ms": 0.00071183
   },
   {
     "name": "conditional",
-    "execution_time_ms": 0.00098843
+    "execution_time_ms": 0.00099693
   },
   {
     "name": "nested_access",
-    "execution_time_ms": 0.00047192
+    "execution_time_ms": 0.0004768
   },
   {
     "name": "filter_usage",
-    "execution_time_ms": 0.00086538
+    "execution_time_ms": 0.00088005
   },
   {
     "name": "complex_template",
-    "execution_time_ms": 0.00568959
+    "execution_time_ms": 0.0057035
   },
   {
     "name": "deep_nesting",
-    "execution_time_ms": 0.0013899399999999999
+    "execution_time_ms": 0.00136414
   },
   {
     "name": "nested_loops",
-    "execution_time_ms": 0.01401239
+    "execution_time_ms": 0.0139139
   },
   {
     "name": "string_manipulation",
-    "execution_time_ms": 0.0014555100000000001
+    "execution_time_ms": 0.0014676000000000001
   },
   {
     "name": "complex_conditional",
-    "execution_time_ms": 0.00199116
+    "execution_time_ms": 0.0020026199999999997
   },
   {
     "name": "items_filter",
-    "execution_time_ms": 0.00727204
+    "execution_time_ms": 0.00736
   },
   {
     "name": "map_get_method",
-    "execution_time_ms": 0.00045568
+    "execution_time_ms": 0.00045442
   }
 ]

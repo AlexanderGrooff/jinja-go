@@ -376,7 +376,7 @@ func EvaluateExpression(expression string, context map[string]interface{}) (inte
 		}
 	}
 
-	// If the expression contains attribute access or is complex, try EvaluateCompoundExpression next
+	// If the expression contains attribute access or is complex, try ParseAndEvaluate next
 	if strings.Contains(trimmedExpression, ".") ||
 		strings.Contains(trimmedExpression, "[") ||
 		strings.Contains(trimmedExpression, ">") ||
@@ -384,7 +384,7 @@ func EvaluateExpression(expression string, context map[string]interface{}) (inte
 		strings.Contains(trimmedExpression, "!") ||
 		strings.Contains(trimmedExpression, "==") ||
 		strings.Contains(trimmedExpression, " not ") {
-		val, err = evaluateCompoundExpression(trimmedExpression, context)
+		val, err = ParseAndEvaluate(trimmedExpression, context)
 		if err == nil {
 			return val, nil
 		}
@@ -400,22 +400,6 @@ func EvaluateExpression(expression string, context map[string]interface{}) (inte
 		// For EvaluateExpression, strictly undefined (and not resolved by a filter like default)
 		// should be an error, as per the project requirements.
 		return nil, fmt.Errorf("variable '%s' is undefined", expression) // Or more specific part that was undefined
-	}
-
-	return val, nil
-}
-
-// EvaluateCompoundExpression evaluates complex expressions including deeply nested dictionary
-// and list operations like {'users': [{'name': 'Alice'}]}['users'][0]['name']
-// It handles these by internally breaking them down into multiple operations.
-func EvaluateCompoundExpression(expression string, context map[string]interface{}) (interface{}, error) {
-	// Trim leading/trailing spaces
-	trimmedExpression := strings.TrimSpace(expression)
-
-	// Use the lower-level function to properly handle compound expressions
-	val, err := evaluateCompoundExpression(trimmedExpression, context)
-	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate compound expression '%s': %v", expression, err)
 	}
 
 	return val, nil
