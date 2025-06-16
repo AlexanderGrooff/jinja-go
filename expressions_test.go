@@ -406,6 +406,12 @@ func TestParseAndEvaluate(t *testing.T) {
 			context: map[string]interface{}{"user": map[string]interface{}{"name": "Alice"}},
 			want:    "Alice",
 		},
+		{
+			name:    "attribute comparison",
+			expr:    "user.age.number > 18",
+			context: map[string]interface{}{"user": map[string]interface{}{"age": map[string]interface{}{"number": 20}}},
+			want:    true,
+		},
 
 		// Subscript access
 		{

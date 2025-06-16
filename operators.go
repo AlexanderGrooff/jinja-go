@@ -131,28 +131,179 @@ func equals(left, right interface{}) (interface{}, error) {
 	return reflect.DeepEqual(left, right), nil
 }
 
+// CompareOp represents a comparison operation
+type CompareOp int
+
+const (
+	OpLT CompareOp = iota // <
+	OpLE                  // <=
+	OpGT                  // >
+	OpGE                  // >=
+	OpEQ                  // ==
+	OpNE                  // !=
+)
+
 // compare performs a comparison operation between two values
-func compare(left, right interface{}, comparator func(float64, float64) bool) (interface{}, error) {
-	var leftFloat, rightFloat float64
-	var err error
-
-	leftFloat, err = toFloat(left)
-	if err != nil {
-		return nil, fmt.Errorf("left operand: %v", err)
+func compare(left, right interface{}, op CompareOp) (interface{}, error) {
+	// Handle nil values
+	if left == nil && right == nil {
+		return op == OpEQ, nil
+	}
+	if left == nil || right == nil {
+		return op == OpNE, nil
 	}
 
-	rightFloat, err = toFloat(right)
-	if err != nil {
-		return nil, fmt.Errorf("right operand: %v", err)
+	// Try direct type matching first for better performance and precision
+	switch l := left.(type) {
+	case int:
+		if r, ok := right.(int); ok {
+			return compareInts(l, r, op), nil
+		}
+		if r, ok := right.(float64); ok {
+			return compareFloat64s(float64(l), r, op), nil
+		}
+	case float64:
+		if r, ok := right.(float64); ok {
+			return compareFloat64s(l, r, op), nil
+		}
+		if r, ok := right.(int); ok {
+			return compareFloat64s(l, float64(r), op), nil
+		}
+	case string:
+		if r, ok := right.(string); ok {
+			return compareStrings(l, r, op), nil
+		}
+		// Try to parse both as numbers if one is a string
+		if lFloat, err := strconv.ParseFloat(l, 64); err == nil {
+			if rFloat, err2 := toFloat(right); err2 == nil {
+				return compareFloat64s(lFloat, rFloat, op), nil
+			}
+		}
+	case bool:
+		if r, ok := right.(bool); ok {
+			return compareBools(l, r, op), nil
+		}
 	}
 
-	return comparator(leftFloat, rightFloat), nil
+	// Fallback to float conversion for mixed numeric types
+	leftFloat, err := toFloat(left)
+	if err != nil {
+		return nil, fmt.Errorf("cannot compare %T with %T", left, right)
+	}
+
+	rightFloat, err := toFloat(right)
+	if err != nil {
+		return nil, fmt.Errorf("cannot compare %T with %T", left, right)
+	}
+
+	return compareFloat64s(leftFloat, rightFloat, op), nil
+}
+
+// compareInts compares two integers directly
+func compareInts(left, right int, op CompareOp) bool {
+	switch op {
+	case OpLT:
+		return left < right
+	case OpLE:
+		return left <= right
+	case OpGT:
+		return left > right
+	case OpGE:
+		return left >= right
+	case OpEQ:
+		return left == right
+	case OpNE:
+		return left != right
+	default:
+		return false
+	}
+}
+
+// compareFloat64s compares two float64 values
+func compareFloat64s(left, right float64, op CompareOp) bool {
+	switch op {
+	case OpLT:
+		return left < right
+	case OpLE:
+		return left <= right
+	case OpGT:
+		return left > right
+	case OpGE:
+		return left >= right
+	case OpEQ:
+		return left == right
+	case OpNE:
+		return left != right
+	default:
+		return false
+	}
+}
+
+// compareStrings compares two strings lexicographically
+func compareStrings(left, right string, op CompareOp) bool {
+	cmp := strings.Compare(left, right)
+	switch op {
+	case OpLT:
+		return cmp < 0
+	case OpLE:
+		return cmp <= 0
+	case OpGT:
+		return cmp > 0
+	case OpGE:
+		return cmp >= 0
+	case OpEQ:
+		return cmp == 0
+	case OpNE:
+		return cmp != 0
+	default:
+		return false
+	}
+}
+
+// compareBools compares two boolean values
+func compareBools(left, right bool, op CompareOp) bool {
+	switch op {
+	case OpLT:
+		return !left && right // false < true
+	case OpLE:
+		return !left || left == right
+	case OpGT:
+		return left && !right // true > false
+	case OpGE:
+		return left || left == right
+	case OpEQ:
+		return left == right
+	case OpNE:
+		return left != right
+	default:
+		return false
+	}
 }
 
 // toFloat converts a value to a float64 for comparison operations
 func toFloat(value interface{}) (float64, error) {
 	switch v := value.(type) {
 	case int:
+		return float64(v), nil
+	case int8:
+		return float64(v), nil
+	case int16:
+		return float64(v), nil
+	case int32:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	case uint:
+		return float64(v), nil
+	case uint8:
+		return float64(v), nil
+	case uint16:
+		return float64(v), nil
+	case uint32:
+		return float64(v), nil
+	case uint64:
+		return float64(v), nil
+	case float32:
 		return float64(v), nil
 	case float64:
 		return v, nil
@@ -173,6 +324,26 @@ func toInteger(value interface{}) (int, error) {
 	switch v := value.(type) {
 	case int:
 		return v, nil
+	case int8:
+		return int(v), nil
+	case int16:
+		return int(v), nil
+	case int32:
+		return int(v), nil
+	case int64:
+		return int(v), nil
+	case uint:
+		return int(v), nil
+	case uint8:
+		return int(v), nil
+	case uint16:
+		return int(v), nil
+	case uint32:
+		return int(v), nil
+	case uint64:
+		return int(v), nil
+	case float32:
+		return int(v), nil
 	case float64:
 		return int(v), nil
 	case string:

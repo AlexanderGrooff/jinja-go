@@ -837,23 +837,19 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 
 		// Equality operators
 		case "==":
-			return equals(left, right)
+			return compare(left, right, OpEQ)
 		case "!=":
-			eq, err := equals(left, right)
-			if err != nil {
-				return nil, err
-			}
-			return !eq.(bool), nil
+			return compare(left, right, OpNE)
 
 		// Comparison operators
 		case "<":
-			return compare(left, right, func(a, b float64) bool { return a < b })
+			return compare(left, right, OpLT)
 		case "<=":
-			return compare(left, right, func(a, b float64) bool { return a <= b })
+			return compare(left, right, OpLE)
 		case ">":
-			return compare(left, right, func(a, b float64) bool { return a > b })
+			return compare(left, right, OpGT)
 		case ">=":
-			return compare(left, right, func(a, b float64) bool { return a >= b })
+			return compare(left, right, OpGE)
 
 		// Membership operators
 		case "in":

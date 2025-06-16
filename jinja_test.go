@@ -473,6 +473,13 @@ func TestEvaluateExpression(t *testing.T) {
 			want:       nil,
 			wantErr:    true,
 		},
+		{
+			name:       "nested attribute comparison",
+			expression: "user.age.number > 18",
+			context:    map[string]interface{}{"user": map[string]interface{}{"age": map[string]interface{}{"number": 20}}},
+			want:       true,
+			wantErr:    false,
+		},
 	}
 
 	for _, tt := range tests {
