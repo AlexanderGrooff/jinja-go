@@ -37,6 +37,11 @@ func init() {
 // lookupFunction implements the Ansible 'lookup' function
 // Usage: {{ lookup("file", "/path/to/file") }}
 // Usage: {{ lookup("env", "HOME") }}
+//
+// IMPORTANT: In Ansible, lookup functions ALWAYS execute on the control node
+// (the machine running the playbook), regardless of where the task is executing
+// or if it's delegated to a remote host. This is different from regular
+// Jinja expressions which are evaluated in the context of the target host.
 func lookupFunction(args ...interface{}) (interface{}, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("lookup function requires a lookup type as first argument")
@@ -55,6 +60,7 @@ func lookupFunction(args ...interface{}) (interface{}, error) {
 	switch lookupType {
 	case "file":
 		// File lookup: lookup('file', '/path/to/file')
+		// This reads files from the control node (where playbook is running)
 		filePath, ok := args[1].(string)
 		if !ok {
 			return nil, fmt.Errorf("file lookup requires a string path, got %T", args[1])
@@ -62,18 +68,22 @@ func lookupFunction(args ...interface{}) (interface{}, error) {
 
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read file %s: %v", filePath, err)
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("lookup file not found on control node: %s", filePath)
+			}
+			return nil, fmt.Errorf("failed to read file %s on control node: %v", filePath, err)
 		}
 		return string(content), nil
 
 	case "env":
 		// Environment variable lookup: lookup('env', 'HOME')
+		// This reads environment variables from the control node
 		envName, ok := args[1].(string)
 		if !ok {
 			return nil, fmt.Errorf("env lookup requires a string environment variable name, got %T", args[1])
 		}
 
-		// Get environment variable
+		// Get environment variable from control node
 		envValue := os.Getenv(envName)
 		return envValue, nil
 

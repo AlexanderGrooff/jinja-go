@@ -1,6 +1,7 @@
 package jinja
 
 import (
+	"encoding/base64"
 	"fmt"
 	"html"
 	"os"
@@ -366,6 +367,11 @@ func itemsFilter(input interface{}, args ...interface{}) (interface{}, error) {
 // It retrieves data from external sources based on lookup type.
 // Usage: {{ lookup('file', '/path/to/file') }}
 // Usage: {{ lookup('env', 'HOME') }}
+//
+// IMPORTANT: In Ansible, lookup functions ALWAYS execute on the control node
+// (the machine running the playbook), regardless of where the task is executing
+// or if it's delegated to a remote host. This is different from regular
+// Jinja expressions which are evaluated in the context of the target host.
 func lookupFilter(input interface{}, args ...interface{}) (interface{}, error) {
 	// For the lookup filter, the input is actually the first argument (lookup type)
 	// and the remaining args are passed to the specific lookup function
@@ -389,10 +395,10 @@ func lookupFilter(input interface{}, args ...interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("file lookup requires a string as file path, got %T", args[0])
 		}
 
-		// Read the file content
+		// Read the file content from control node
 		content, err := readFileContent(filePath)
 		if err != nil {
-			return nil, fmt.Errorf("error reading file '%s': %v", filePath, err)
+			return nil, fmt.Errorf("error reading file '%s' on control node: %v", filePath, err)
 		}
 		return content, nil
 
@@ -405,7 +411,7 @@ func lookupFilter(input interface{}, args ...interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("env lookup requires a string as environment variable name, got %T", args[0])
 		}
 
-		// Get the environment variable
+		// Get the environment variable from control node
 		value := os.Getenv(envVar)
 		return value, nil
 
@@ -425,6 +431,31 @@ func readFileContent(filePath string) (string, error) {
 	return string(content), nil
 }
 
+// b64decodeFilter implements the 'b64decode' filter.
+// It decodes a base64 encoded string.
+// Usage: {{ encoded_string | b64decode }}
+func b64decodeFilter(input interface{}, args ...interface{}) (interface{}, error) {
+	if input == nil {
+		return "", nil
+	}
+
+	var str string
+	switch v := input.(type) {
+	case string:
+		str = v
+	default:
+		// Try to convert to string
+		str = fmt.Sprintf("%v", input)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64 string: %v", err)
+	}
+
+	return string(decoded), nil
+}
+
 func init() {
 	// Initialize GlobalFilters after all filter functions are defined
 	GlobalFilters = map[string]FilterFunc{
@@ -440,5 +471,6 @@ func init() {
 		"map":        mapFilter,
 		"items":      itemsFilter,
 		"lookup":     lookupFilter,
+		"b64decode":  b64decodeFilter,
 	}
 }
