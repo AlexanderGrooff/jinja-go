@@ -519,6 +519,13 @@ func TestEvaluateExpression(t *testing.T) {
 			want:       []interface{}{"a", "b", "c "},
 			wantErr:    false,
 		},
+		{
+			name:       "nested list expression",
+			expression: "[[1, 2], [3, 4]]",
+			context:    map[string]interface{}{},
+			want:       []interface{}{[]interface{}{1, 2}, []interface{}{3, 4}},
+			wantErr:    false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2352,6 +2359,13 @@ func TestTemplateString_ForLoopWithListLiteral(t *testing.T) {
 			template: `{% for item in [1, 'two', 3.0, my_var] %}{{ item }}{% if not loop.last %},{% endif %}{% endfor %}`,
 			context:  map[string]interface{}{"my_var": "four"},
 			want:     "1,two,3,four",
+			wantErr:  false,
+		},
+		{
+			name:     "nested list literal iteration",
+			template: `{% for item in [[1, 2], [3, 4]] %}{{ item[0] }}-{{ item[1] }}{% if not loop.last %},{% endif %}{% endfor %}`,
+			context:  map[string]interface{}{},
+			want:     "1-2,3-4",
 			wantErr:  false,
 		},
 	}

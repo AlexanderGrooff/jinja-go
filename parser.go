@@ -114,16 +114,13 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 		currentValue = items
 	} else {
 		// Not a recognized literal. Assume it's a variable name.
-
-		// Check for dot notation (e.g., loop.index, user.name)
-		if strings.Contains(baseExpr, ".") && !strings.Contains(baseExpr, " ") {
-			// Try to evaluate as dot notation
-			dotVal, err := evaluateDotNotation(baseExpr, context)
-			if err == nil {
-				currentValue = dotVal
-			} else {
+		if strings.Contains(baseExpr, ".") || strings.Contains(baseExpr, "[") {
+			val, err := evaluateComplexVariable(baseExpr, context)
+			if err != nil {
 				initialLookupFailed = true
-				currentValue = nil // Represents undefined for now
+				currentValue = nil
+			} else {
+				currentValue = val
 			}
 		} else {
 			// Regular variable lookup
@@ -192,6 +189,87 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 	}
 
 	return currentValue, initialLookupFailed && currentValueIsEffectivelyUndefined, nil
+}
+
+// evaluateComplexVariable handles dot notation (e.g., user.name) and subscript access (e.g., items[0])
+func evaluateComplexVariable(expression string, context map[string]interface{}) (interface{}, error) {
+	// This function handles dot notation (e.g., user.name) and subscript access (e.g., items[0])
+	var current interface{} = context
+	var err error
+
+	// Tokenize the expression by delimiters '.', '['
+	// This is a simplified approach. A proper parser would be more robust.
+	// Example: "user.address['city']" -> "user", ".address", "['city']"
+	// For now, let's split by '.' and handle brackets inside the loop
+	parts := strings.Split(expression, ".")
+	isInitial := true
+
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" {
+			continue // Should not happen with well-formed expressions
+		}
+
+		// Handle subscript access within the part, e.g., "items[0]"
+		subscriptMatch := strings.SplitN(part, "[", 2)
+		baseVar := subscriptMatch[0]
+
+		if isInitial {
+			var exists bool
+			current, exists = context[baseVar]
+			if !exists {
+				return nil, fmt.Errorf("variable '%s' not found", baseVar)
+			}
+			isInitial = false
+		} else if baseVar != "" {
+			// It's a dot access on the current value
+			if m, ok := current.(map[string]interface{}); ok {
+				var exists bool
+				current, exists = m[baseVar]
+				if !exists {
+					return nil, fmt.Errorf("key '%s' not found in map", baseVar)
+				}
+			} else {
+				return nil, fmt.Errorf("cannot access attribute '%s' on non-map type %T", baseVar, current)
+			}
+		}
+
+		if len(subscriptMatch) > 1 {
+			// We have a subscript part, e.g., "0]" or "'key']"
+			subscriptContent := strings.TrimSuffix(subscriptMatch[1], "]")
+
+			// The index/key itself can be an expression
+			indexVal, errEval := evaluateLiteralOrVariable(subscriptContent, context)
+			if errEval != nil {
+				return nil, fmt.Errorf("failed to evaluate subscript index/key '%s': %v", subscriptContent, errEval)
+			}
+
+			switch c := current.(type) {
+			case []interface{}:
+				idx, ok := indexVal.(int)
+				if !ok {
+					return nil, fmt.Errorf("list index must be an integer, got %T", indexVal)
+				}
+				if idx < 0 || idx >= len(c) {
+					return nil, fmt.Errorf("index %d out of bounds for list of length %d", idx, len(c))
+				}
+				current = c[idx]
+			case map[string]interface{}:
+				key, ok := indexVal.(string)
+				if !ok {
+					return nil, fmt.Errorf("map key must be a string, got %T", indexVal)
+				}
+				var exists bool
+				current, exists = c[key]
+				if !exists {
+					return nil, fmt.Errorf("key '%s' not found in map", key)
+				}
+			default:
+				return nil, fmt.Errorf("cannot apply subscript access to type %T", current)
+			}
+		}
+	}
+
+	return current, err
 }
 
 // evaluateLiteralOrVariable tries to parse a string as a literal (string, int, bool)
