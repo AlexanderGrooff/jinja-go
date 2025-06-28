@@ -243,6 +243,24 @@ func TestTemplateString(t *testing.T) {
 			context:  map[string]interface{}{},
 			want:     "Hello {# unclosed comment", // Unclosed comment is treated as text by parser
 		},
+		{
+			name:     "template with list of strings",
+			template: "{{ ['abc'] }}",
+			context:  map[string]interface{}{},
+			want:     "abc",
+		},
+		{
+			name:     "template with list of strings and variables",
+			template: "{{ ['a', 'b', expr] }}",
+			context:  map[string]interface{}{"expr": "C"},
+			want:     "abC",
+		},
+		{
+			name:     "template with list and extra whitespaces",
+			template: "{{ [ 'a',  'b' ,  'c'  ] }}",
+			context:  map[string]interface{}{},
+			want:     "abc",
+		},
 	}
 
 	for _, tt := range tests {
@@ -478,6 +496,27 @@ func TestEvaluateExpression(t *testing.T) {
 			expression: "user.age.number > 18",
 			context:    map[string]interface{}{"user": map[string]interface{}{"age": map[string]interface{}{"number": 20}}},
 			want:       true,
+			wantErr:    false,
+		},
+		{
+			name:       "list of strings",
+			expression: "['a', 'b', 'c']",
+			context:    map[string]interface{}{},
+			want:       []interface{}{"a", "b", "c"},
+			wantErr:    false,
+		},
+		{
+			name:       "list of strings and variables",
+			expression: "['a', 'b', expr]",
+			context:    map[string]interface{}{"expr": "C"},
+			want:       []interface{}{"a", "b", "C"},
+			wantErr:    false,
+		},
+		{
+			name:       "list with extra whitespaces",
+			expression: "[ 'a',  'b',  'c ' ]",
+			context:    map[string]interface{}{},
+			want:       []interface{}{"a", "b", "c "},
 			wantErr:    false,
 		},
 	}
@@ -2295,6 +2334,37 @@ func TestParseVariables(t *testing.T) {
 
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ParseVariables() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTemplateString_ForLoopWithListLiteral(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "list literal iteration",
+			template: `{% for item in [1, 'two', 3.0, my_var] %}{{ item }}{% if not loop.last %},{% endif %}{% endfor %}`,
+			context:  map[string]interface{}{"my_var": "four"},
+			want:     "1,two,3,four",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := TemplateString(tt.template, tt.context)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TemplateString() error = %v, wantErr %v for template %q", err, tt.wantErr, tt.template)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("TemplateString() got = %q, want %q for template %q", got, tt.want, tt.template)
 			}
 		})
 	}

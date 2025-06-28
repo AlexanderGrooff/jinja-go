@@ -7,6 +7,10 @@ import (
 	"sync"
 )
 
+func init() {
+	evaluateExpressionFunc = EvaluateExpression
+}
+
 // TemplateCache is a thread-safe cache for parsed templates
 type TemplateCache struct {
 	cache map[string][]*Node
@@ -124,6 +128,13 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 			case nil:
 				// nil values render as empty strings
 				// Do nothing, no output
+			case []interface{}:
+				// Special handling for slices to match Jinja's behavior of concatenating items
+				var strItems []string
+				for _, item := range v {
+					strItems = append(strItems, fmt.Sprintf("%v", item))
+				}
+				result.WriteString(strings.Join(strItems, ""))
 			default:
 				// For all other types, use fmt.Sprintf to get a string representation
 				result.WriteString(fmt.Sprintf("%v", v))

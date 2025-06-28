@@ -342,6 +342,29 @@ func TestParser_ParseNext(t *testing.T) {
 				{Type: NodeControlTag, Content: "endif", Control: &ControlTagInfo{Type: ControlEndIf}},
 			},
 		},
+		{
+			name:     "list literal",
+			template: "{{ [1, '2', three] }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " [1, '2', three] "},
+			},
+		},
+		{
+			name:     "list in for loop",
+			template: "{% for item in [1, 2, 3] %}{{ item }}{% endfor %}",
+			want: []*Node{
+				{Type: NodeControlTag, Content: "for item in [1, 2, 3]", Control: &ControlTagInfo{Type: ControlFor, Expression: "item in [1, 2, 3]"}},
+				{Type: NodeExpression, Content: " item "},
+				{Type: NodeControlTag, Content: "endfor", Control: &ControlTagInfo{Type: ControlEndFor}},
+			},
+		},
+		{
+			name:     "list literal with extra whitespaces",
+			template: "{{ [ 1,  '2' ,   three  ] }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " [ 1,  '2' ,   three  ] "},
+			},
+		},
 	}
 
 	for _, tt := range tests {

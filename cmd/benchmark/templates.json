@@ -127,5 +127,12 @@
     "context": {
       "mapping": {"key": "value"}
     }
+  },
+  {
+    "name": "list_literal_iteration",
+    "template": "{% for item in [1, 'two', 3.0, my_var] %}{{ item }}{% if not loop.last %},{% endif %}{% endfor %}",
+    "context": {
+      "my_var": "four"
+    }
   }
 ] 

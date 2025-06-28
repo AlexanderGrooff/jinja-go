@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+var evaluateExpressionFunc func(expression string, context map[string]interface{}) (interface{}, error)
+
 // Parser holds the state of the parsing process.
 // It is used to iteratively parse a template string into a sequence of nodes.
 type Parser struct {
@@ -100,6 +102,16 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 		currentValue = i
 	} else if bVal, errConv := strconv.ParseBool(baseExpr); errConv == nil {
 		currentValue = bVal
+	} else if strings.HasPrefix(baseExpr, "[") && strings.HasSuffix(baseExpr, "]") {
+		listContent := baseExpr[1 : len(baseExpr)-1]
+		// Each item in the list can be an expression itself, so we need to parse them.
+		// For now, we will parse them as literal or variable.
+		// A more complete solution would recursively call an expression evaluator.
+		items, err := parseListItems(listContent, context)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to parse list: %v", err)
+		}
+		currentValue = items
 	} else {
 		// Not a recognized literal. Assume it's a variable name.
 
@@ -331,6 +343,37 @@ func splitExpressionWithFilters(fullExprStr string) []string {
 	return finalParts
 }
 
+// parseListItems parses the content of a Jinja list literal, e.g. "item1, 'item2', var3"
+func parseListItems(content string, context map[string]interface{}) ([]interface{}, error) {
+	if strings.TrimSpace(content) == "" {
+		return []interface{}{}, nil
+	}
+	rawItems := splitArguments(content, ',')
+	var items []interface{}
+	for _, rawItem := range rawItems {
+		trimmedItem := strings.TrimSpace(rawItem)
+		if trimmedItem == "" {
+			continue // Allow trailing commas or empty items
+		}
+		// Use evaluateLiteralOrVariable for each item. This is a simplification.
+		// A full implementation would need to handle complex expressions as items.
+		itemValue, err := evaluateLiteralOrVariable(trimmedItem, context)
+		if err != nil {
+			// fallback to EvaluateExpression for more complex list items
+			if evaluateExpressionFunc != nil {
+				itemValue, err = evaluateExpressionFunc(trimmedItem, context)
+				if err != nil {
+					return nil, fmt.Errorf("could not evaluate list item '%s': %v", trimmedItem, err)
+				}
+			} else {
+				return nil, fmt.Errorf("EvaluateExpression not initialized")
+			}
+		}
+		items = append(items, itemValue)
+	}
+	return items, nil
+}
+
 // parseFilterCall parses a filter string like "default('fallback', true)"
 // into filter name "default" and raw (un-evaluated) arguments ["'fallback'", "true"].
 func parseFilterCall(filterCallStr string) (name string, args []string, err error) {
@@ -363,84 +406,7 @@ func parseFilterCall(filterCallStr string) (name string, args []string, err erro
 		return name, []string{}, nil
 	}
 
-	// Argument parsing: This is complex. For "name(arg1, 'arg2, still arg2', arg3)"
-	// A simple strings.Split by ',' will fail.
-	// Need to respect quotes and potentially nested structures.
-	var parsedArgs []string
-	var currentArg strings.Builder
-	argInSingleQuote := false
-	argInDoubleQuote := false
-	argParenLevel := 0
-
-	for i, r := range argsStr {
-		switch r {
-		case '\'':
-			// Check if this is an escaped quote
-			isEscaped := false
-			if i > 0 && argsStr[i-1] == '\\' {
-				// Check if the backslash itself is escaped
-				if i > 1 && argsStr[i-2] == '\\' {
-					// The backslash was escaped, so the quote is not escaped
-					isEscaped = false
-				} else {
-					// The quote is escaped
-					isEscaped = true
-				}
-			}
-
-			if !isEscaped {
-				argInSingleQuote = !argInSingleQuote
-			}
-			currentArg.WriteRune(r)
-		case '"':
-			// Check if this is an escaped quote
-			isEscaped := false
-			if i > 0 && argsStr[i-1] == '\\' {
-				// Check if the backslash itself is escaped
-				if i > 1 && argsStr[i-2] == '\\' {
-					// The backslash was escaped, so the quote is not escaped
-					isEscaped = false
-				} else {
-					// The quote is escaped
-					isEscaped = true
-				}
-			}
-
-			if !isEscaped {
-				argInDoubleQuote = !argInDoubleQuote
-			}
-			currentArg.WriteRune(r)
-		case '(':
-			if !argInSingleQuote && !argInDoubleQuote {
-				argParenLevel++
-			}
-			currentArg.WriteRune(r)
-		case ')':
-			if !argInSingleQuote && !argInDoubleQuote {
-				if argParenLevel > 0 {
-					argParenLevel--
-				}
-			}
-			currentArg.WriteRune(r)
-		case ',':
-			if !argInSingleQuote && !argInDoubleQuote && argParenLevel == 0 {
-				parsedArgs = append(parsedArgs, strings.TrimSpace(currentArg.String()))
-				currentArg.Reset()
-			} else {
-				currentArg.WriteRune(r)
-			}
-		default:
-			currentArg.WriteRune(r)
-		}
-	}
-	// Add the last argument
-	if currentArg.Len() > 0 || len(parsedArgs) == 0 && strings.TrimSpace(argsStr) != "" {
-		// Add if currentArg has content, OR if there are no parsedArgs yet but argsStr was not empty (single arg case)
-		lastArg := strings.TrimSpace(currentArg.String())
-		if lastArg != "" || (len(parsedArgs) == 0 && strings.TrimSpace(argsStr) != "") {
-			parsedArgs = append(parsedArgs, lastArg)
-		}
-	}
+	parsedArgs := splitArguments(argsStr, ',')
 
 	// Filter out any empty strings that might result from parsing ", ," or trailing commas, unless it's a single empty string literal.
 	// Example: default('') should yield one arg: "''"
@@ -940,4 +906,64 @@ func (p *Parser) ParseNext() (*Node, error) {
 		p.pos += nextMarkerPos // Advance p.pos to the start of the next marker
 		return &Node{Type: NodeText, Content: content}, nil
 	}
+}
+
+// splitArguments is a helper to split a string by a separator, respecting quotes and nested structures.
+func splitArguments(s string, separator rune) []string {
+	var parts []string
+	var currentPart strings.Builder
+	inSingleQuote := false
+	inDoubleQuote := false
+	parenLevel := 0
+	bracketLevel := 0 // for lists
+	braceLevel := 0   // for dicts
+
+	for i, r := range s {
+		writeRune := true
+		switch r {
+		case '\'':
+			if i == 0 || s[i-1] != '\\' {
+				inSingleQuote = !inSingleQuote
+			}
+		case '"':
+			if i == 0 || s[i-1] != '\\' {
+				inDoubleQuote = !inDoubleQuote
+			}
+		case '(':
+			if !inSingleQuote && !inDoubleQuote {
+				parenLevel++
+			}
+		case ')':
+			if !inSingleQuote && !inDoubleQuote {
+				parenLevel--
+			}
+		case '[':
+			if !inSingleQuote && !inDoubleQuote {
+				bracketLevel++
+			}
+		case ']':
+			if !inSingleQuote && !inDoubleQuote {
+				bracketLevel--
+			}
+		case '{':
+			if !inSingleQuote && !inDoubleQuote {
+				braceLevel++
+			}
+		case '}':
+			if !inSingleQuote && !inDoubleQuote {
+				braceLevel--
+			}
+		default:
+			if r == separator && !inSingleQuote && !inDoubleQuote && parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
+				parts = append(parts, strings.TrimSpace(currentPart.String()))
+				currentPart.Reset()
+				writeRune = false
+			}
+		}
+		if writeRune {
+			currentPart.WriteRune(r)
+		}
+	}
+	parts = append(parts, strings.TrimSpace(currentPart.String()))
+	return parts
 }
