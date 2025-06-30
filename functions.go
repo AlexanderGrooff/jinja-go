@@ -9,7 +9,7 @@ import (
 )
 
 // FunctionFunc defines the signature for a function callable from templates
-type FunctionFunc func(args ...interface{}) (interface{}, error)
+type FunctionFunc func(e *Evaluator, args ...interface{}) (interface{}, error)
 
 // GlobalFunctions stores the registered functions that can be called directly in templates
 var GlobalFunctions map[string]FunctionFunc
@@ -42,7 +42,7 @@ func init() {
 // (the machine running the playbook), regardless of where the task is executing
 // or if it's delegated to a remote host. This is different from regular
 // Jinja expressions which are evaluated in the context of the target host.
-func lookupFunction(args ...interface{}) (interface{}, error) {
+func lookupFunction(e *Evaluator, args ...interface{}) (interface{}, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("lookup function requires a lookup type as first argument")
 	}
@@ -86,6 +86,21 @@ func lookupFunction(args ...interface{}) (interface{}, error) {
 		// Get environment variable from control node
 		envValue := os.Getenv(envName)
 		return envValue, nil
+	case "template":
+		templatePath, ok := args[1].(string)
+		if !ok {
+			return nil, fmt.Errorf("lookup 'template' second argument must be a string (path to template), got %T", args[1])
+		}
+		templateContent, err := os.ReadFile(templatePath)
+		if err != nil {
+			return nil, fmt.Errorf("lookup 'template': failed to read template file %s: %w", templatePath, err)
+		}
+
+		rendered, err := TemplateString(string(templateContent), e.context)
+		if err != nil {
+			return nil, fmt.Errorf("lookup 'template': failed to render template %s: %w", templatePath, err)
+		}
+		return rendered, nil
 
 	default:
 		return nil, fmt.Errorf("unsupported lookup type: %s", lookupType)
@@ -119,7 +134,7 @@ func registerStringMethods() {
 // mapGetMethod implements the dictionary get method:
 // Usage: {{ my_dict.get('key') }} -> returns the value for key
 // Usage: {{ my_dict.get('key', 'default') }} -> returns value for key or default if key doesn't exist
-func mapGetMethod(args ...interface{}) (interface{}, error) {
+func mapGetMethod(e *Evaluator, args ...interface{}) (interface{}, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("get method requires at least a dictionary and a key")
 	}
@@ -209,7 +224,7 @@ func mapGetMethod(args ...interface{}) (interface{}, error) {
 // Usage: {{ "Hello, {}!".format("world") }} -> "Hello, world!"
 // Usage: {{ "Hello, {name}!".format(name="world") }} -> "Hello, world!"
 // Usage: {{ "{0}, {1}, {2}".format("a", "b", "c") }} -> "a, b, c"
-func stringFormatMethod(args ...interface{}) (interface{}, error) {
+func stringFormatMethod(e *Evaluator, args ...interface{}) (interface{}, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("format method requires a string")
 	}

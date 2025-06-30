@@ -2115,7 +2115,7 @@ func TestStringFormatMethod(t *testing.T) {
 			context: map[string]interface{}{
 				"format_string": "Hello, {}!",
 				"formatted_string": func() string {
-					result, _ := stringFormatMethod("Hello, {}!", "world")
+					result, _ := stringFormatMethod(nil, "Hello, {}!", "world")
 					return result.(string)
 				}(),
 			},
@@ -2127,7 +2127,7 @@ func TestStringFormatMethod(t *testing.T) {
 			template: "{{ formatted_string }}",
 			context: map[string]interface{}{
 				"formatted_string": func() string {
-					result, _ := stringFormatMethod("{} {} {}", "a", "b", "c")
+					result, _ := stringFormatMethod(nil, "{} {} {}", "a", "b", "c")
 					return result.(string)
 				}(),
 			},
@@ -2139,7 +2139,7 @@ func TestStringFormatMethod(t *testing.T) {
 			template: "{{ formatted_string }}",
 			context: map[string]interface{}{
 				"formatted_string": func() string {
-					result, _ := stringFormatMethod("{0}, {1}, {2}", "a", "b", "c")
+					result, _ := stringFormatMethod(nil, "{0}, {1}, {2}", "a", "b", "c")
 					return result.(string)
 				}(),
 			},
@@ -2151,7 +2151,7 @@ func TestStringFormatMethod(t *testing.T) {
 			template: "{{ formatted_string }}",
 			context: map[string]interface{}{
 				"formatted_string": func() string {
-					result, _ := stringFormatMethod("{2}, {0}, {1}", "a", "b", "c")
+					result, _ := stringFormatMethod(nil, "{2}, {0}, {1}", "a", "b", "c")
 					return result.(string)
 				}(),
 			},
@@ -2163,7 +2163,7 @@ func TestStringFormatMethod(t *testing.T) {
 			template: "{{ formatted_string }}",
 			context: map[string]interface{}{
 				"formatted_string": func() string {
-					result, _ := stringFormatMethod("{} {} {}", "a", "b")
+					result, _ := stringFormatMethod(nil, "{} {} {}", "a", "b")
 					return result.(string)
 				}(),
 			},
@@ -2343,6 +2343,52 @@ func TestParseVariables(t *testing.T) {
 				t.Errorf("ParseVariables() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLookupTemplate(t *testing.T) {
+	// Create a temporary template file
+	templateContent := []byte("Hello from included template, {{ name }}!")
+	tmpFile, err := os.CreateTemp("", "template-*.j2")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name()) // clean up
+
+	if err := os.WriteFile(tmpFile.Name(), templateContent, 0644); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
+
+	// Main template that uses lookup
+	mainTemplate := `Before lookup. {{ lookup('template', '` + tmpFile.Name() + `') }} After lookup.`
+	context := map[string]interface{}{
+		"name": "Jinja-Go",
+	}
+
+	expected := "Before lookup. Hello from included template, Jinja-Go! After lookup."
+
+	result, err := TemplateString(mainTemplate, context)
+	if err != nil {
+		t.Fatalf("TemplateString failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, result)
+	}
+}
+
+func TestLookupTemplateNotFound(t *testing.T) {
+	mainTemplate := `{{ lookup('template', 'non_existent_file.j2') }}`
+	context := map[string]interface{}{}
+
+	_, err := TemplateString(mainTemplate, context)
+	if err == nil {
+		t.Fatal("Expected an error for non-existent template file, but got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read template file") {
+		t.Errorf("Expected error to contain 'failed to read template file', got: %v", err)
 	}
 }
 

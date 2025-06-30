@@ -1010,7 +1010,7 @@ func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
 		// Only allocate if we have arguments
 		if argsLen == 0 {
 			// No args, direct call
-			return funcTyped()
+			return funcTyped(e)
 		}
 
 		// Evaluate all arguments with preallocated slice
@@ -1024,7 +1024,7 @@ func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
 		}
 
 		// Call the function with the arguments
-		result, err := funcTyped(args...)
+		result, err := funcTyped(e, args...)
 		if err != nil {
 			return nil, fmt.Errorf("error calling function '%s': %v", funcName, err)
 		}
@@ -1132,7 +1132,7 @@ func (e *Evaluator) evaluateFunctionCall(node *ExprNode) (interface{}, error) {
 		}
 
 		// Call the method with the object as first argument
-		result, err := methodFunc(args...)
+		result, err := methodFunc(e, args...)
 		if err != nil {
 			return nil, fmt.Errorf("error calling method '%s': %v", methodName, err)
 		}
