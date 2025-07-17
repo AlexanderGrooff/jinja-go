@@ -261,6 +261,41 @@ func TestTemplateString(t *testing.T) {
 			context:  map[string]interface{}{},
 			want:     "abc",
 		},
+		{
+			name:     "list or operator",
+			template: "{{ [] or ['a', 'b'] }}",
+			context:  map[string]interface{}{},
+			want:     "ab",
+			wantErr:  false,
+		},
+		{
+			name:     "list or operator wrapped in parentheses",
+			template: "{{ ([] or ['a', 'b']) }}",
+			context:  map[string]interface{}{},
+			want:     "ab",
+			wantErr:  false,
+		},
+		// {
+		// 	name:     "mixed list concatenation",
+		// 	template: "{{ [1,2]+([] or ['a', 'b'])+var+[3,4] }}",
+		// 	context:  map[string]interface{}{"var": []string{"c"}},
+		// 	want:     "12abc34",
+		// 	wantErr:  false,
+		// },
+		{
+			name:     "list equality",
+			template: "{{ ['a', 'b'] == ['a', 'b'] }}",
+			context:  map[string]interface{}{},
+			want:     "true",
+			wantErr:  false,
+		},
+		{
+			name:     "list inequality",
+			template: "{{ ['a', 'b'] != ['a', 'b'] }}",
+			context:  map[string]interface{}{},
+			want:     "false",
+			wantErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -879,9 +914,9 @@ func TestCompareExpressionEvaluators(t *testing.T) {
 			name:          "dot notation with comparison",
 			expression:    "loop.index > 1",
 			context:       map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
-			wantBothEqual: false, // ParseAndEvaluate doesn't directly support dot notation in comparisons
+			wantBothEqual: true, // ParseAndEvaluate now supports dot notation in comparisons
 			wantErr:       false,
-			parseErr:      true, // We expect ParseAndEvaluate to error
+			parseErr:      false, // ParseAndEvaluate should succeed
 		},
 		{
 			name:          "not with dot notation",

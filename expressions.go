@@ -305,15 +305,53 @@ func (l *Lexer) tryTokenizeOperator() bool {
 		// For less common operators, check the map
 		twoChars := l.input[l.pos : l.pos+2]
 		if _, found := operators[twoChars]; found {
-			l.addToken(TokenOperator, twoChars)
-			return true
+			// Skip word-sensitive operators - they need boundary checks
+			if twoChars == "in" || twoChars == "is" || twoChars == "or" {
+				// These will be handled by the specific boundary checks below
+			} else {
+				l.addToken(TokenOperator, twoChars)
+				return true
+			}
 		}
 	}
 
 	// Try "is" operator - special case since it can be part of "is not"
 	if l.pos+2 <= len(l.input) && l.input[l.pos] == 'i' && l.input[l.pos+1] == 's' &&
-		(l.pos+2 >= len(l.input) || !isAlphaNumeric(l.input[l.pos+2])) {
+		(l.pos+2 >= len(l.input) || !isAlphaNumeric(l.input[l.pos+2])) &&
+		(l.pos == 0 || !isAlphaNumeric(l.input[l.pos-1])) {
 		l.addToken(TokenOperator, "is")
+		return true
+	}
+
+	// Try "in" operator - special case since it can be part of longer identifiers
+	if l.pos+2 <= len(l.input) && l.input[l.pos] == 'i' && l.input[l.pos+1] == 'n' &&
+		(l.pos+2 >= len(l.input) || !isAlphaNumeric(l.input[l.pos+2])) &&
+		(l.pos == 0 || !isAlphaNumeric(l.input[l.pos-1])) {
+		l.addToken(TokenOperator, "in")
+		return true
+	}
+
+	// Try "or" operator - special case since it can be part of longer identifiers
+	if l.pos+2 <= len(l.input) && l.input[l.pos] == 'o' && l.input[l.pos+1] == 'r' &&
+		(l.pos+2 >= len(l.input) || !isAlphaNumeric(l.input[l.pos+2])) &&
+		(l.pos == 0 || !isAlphaNumeric(l.input[l.pos-1])) {
+		l.addToken(TokenOperator, "or")
+		return true
+	}
+
+	// Try "and" operator - special case since it can be part of longer identifiers
+	if l.pos+3 <= len(l.input) && l.input[l.pos] == 'a' && l.input[l.pos+1] == 'n' && l.input[l.pos+2] == 'd' &&
+		(l.pos+3 >= len(l.input) || !isAlphaNumeric(l.input[l.pos+3])) &&
+		(l.pos == 0 || !isAlphaNumeric(l.input[l.pos-1])) {
+		l.addToken(TokenOperator, "and")
+		return true
+	}
+
+	// Try "not" operator - special case since it can be part of longer identifiers
+	if l.pos+3 <= len(l.input) && l.input[l.pos] == 'n' && l.input[l.pos+1] == 'o' && l.input[l.pos+2] == 't' &&
+		(l.pos+3 >= len(l.input) || !isAlphaNumeric(l.input[l.pos+3])) &&
+		(l.pos == 0 || !isAlphaNumeric(l.input[l.pos-1])) {
+		l.addToken(TokenOperator, "not")
 		return true
 	}
 
@@ -837,9 +875,13 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 
 		// Equality operators
 		case "==":
-			return compare(left, right, OpEQ)
+			return equals(left, right)
 		case "!=":
-			return compare(left, right, OpNE)
+			result, err := equals(left, right)
+			if err != nil {
+				return nil, err
+			}
+			return !result.(bool), nil
 
 		// Comparison operators
 		case "<":

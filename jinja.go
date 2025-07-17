@@ -110,16 +110,38 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 				}
 			}
 
-			// For normal expressions, use the filter pipeline
-			val, wasUndefined, err := evaluateFullExpressionInternal(node.Content, context)
-			if err != nil {
-				return "", fmt.Errorf("error evaluating expression '{{ %s }}': %v", node.Content, err)
-			}
+			// For normal expressions, check if it contains filters (pipe syntax)
+			var val interface{}
+			var wasUndefined bool
+			var err error
+			if strings.Contains(trimmedExpr, "|") {
+				// Use the old filter pipeline for expressions with filters
+				val, wasUndefined, err = evaluateFullExpressionInternal(node.Content, context)
+				if err != nil {
+					return "", fmt.Errorf("error evaluating expression '{{ %s }}': %v", node.Content, err)
+				}
 
-			if wasUndefined && val == nil {
-				// Jinja2 renders undefined variables as empty strings
-				currentIndex++
-				continue
+				if wasUndefined && val == nil {
+					// Jinja2 renders undefined variables as empty strings
+					currentIndex++
+					continue
+				}
+			} else {
+				// Try the new parser for expressions without filters
+				val, err = ParseAndEvaluate(trimmedExpr, context)
+				if err != nil {
+					// Fallback to the old filter pipeline
+					val, wasUndefined, err = evaluateFullExpressionInternal(node.Content, context)
+					if err != nil {
+						return "", fmt.Errorf("error evaluating expression '{{ %s }}': %v", node.Content, err)
+					}
+
+					if wasUndefined && val == nil {
+						// Jinja2 renders undefined variables as empty strings
+						currentIndex++
+						continue
+					}
+				}
 			}
 
 			switch v := val.(type) {

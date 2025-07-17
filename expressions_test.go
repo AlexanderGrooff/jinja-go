@@ -557,6 +557,48 @@ func TestParseAndEvaluate(t *testing.T) {
 			context: map[string]interface{}{},
 			want:    "a a",
 		},
+		{
+			name:    "list equality",
+			expr:    "['a', 'b'] == ['a', 'b']",
+			context: map[string]interface{}{},
+			want:    true,
+		},
+		{
+			name:    "list equality with variables",
+			expr:    "var == ['a', 'b']",
+			context: map[string]interface{}{"var": []interface{}{"a", "b"}},
+			want:    true,
+		},
+		{
+			name:    "nested list equality with variables",
+			expr:    "var == [['a', 'b'], ['c', 'd']]",
+			context: map[string]interface{}{"var": []interface{}{[]interface{}{"a", "b"}, []interface{}{"c", "d"}}},
+			want:    true,
+		},
+		{
+			name:    "list equality with nested list variables",
+			expr:    "var.list_var == ['a', 'b']",
+			context: map[string]interface{}{"var": map[string]interface{}{"list_var": []interface{}{"a", "b"}}},
+			want:    true,
+		},
+		{
+			name:    "list inequality",
+			expr:    "['a', 'b'] != ['a', 'b']",
+			context: map[string]interface{}{},
+			want:    false,
+		},
+		{
+			name:    "list inequality with different order",
+			expr:    "['a', 'b'] != ['b', 'a']",
+			context: map[string]interface{}{},
+			want:    true,
+		},
+		{
+			name:    "list inequality with different elements",
+			expr:    "['a', 'b'] != ['a', 'c']",
+			context: map[string]interface{}{},
+			want:    true,
+		},
 	}
 
 	for _, tt := range tests {

@@ -1,54 +1,86 @@
 [
   {
     "name": "simple_variable",
-    "execution_time_ms": 0.006123
+    "execution_time_ms": 0.000889
   },
   {
     "name": "multiple_variables",
-    "execution_time_ms": 0.015267
+    "execution_time_ms": 0.002139
   },
   {
     "name": "conditional",
-    "execution_time_ms": 0.014523999999999999
+    "execution_time_ms": 0.002024
   },
   {
     "name": "nested_access",
-    "execution_time_ms": 0.003814
+    "execution_time_ms": 0.000798
   },
   {
     "name": "filter_usage",
-    "execution_time_ms": 0.007583
+    "execution_time_ms": 0.001078
   },
   {
     "name": "complex_template",
-    "execution_time_ms": 0.031609000000000005
+    "execution_time_ms": 0.008185000000000001
   },
   {
     "name": "deep_nesting",
-    "execution_time_ms": 0.011073000000000001
+    "execution_time_ms": 0.0020440000000000002
   },
   {
     "name": "nested_loops",
-    "execution_time_ms": 0.07424800000000001
+    "execution_time_ms": 0.017417000000000002
   },
   {
     "name": "string_manipulation",
-    "execution_time_ms": 0.012712
+    "execution_time_ms": 0.001581
   },
   {
     "name": "complex_conditional",
-    "execution_time_ms": 0.010657999999999999
+    "execution_time_ms": 0.002458
   },
   {
     "name": "items_filter",
-    "execution_time_ms": 0.060234
+    "execution_time_ms": 0.009489000000000001
   },
   {
     "name": "map_get_method",
-    "execution_time_ms": 0.0033490000000000004
+    "execution_time_ms": 0.000626
   },
   {
-    "name": "string_format_method",
-    "execution_time_ms": 0.000026
+    "name": "list_literal_iteration",
+    "execution_time_ms": 0.006974999999999999
+  },
+  {
+    "name": "arithmetic_addition",
+    "execution_time_ms": 0.001191
+  },
+  {
+    "name": "arithmetic_multiplication",
+    "execution_time_ms": 0.000739
+  },
+  {
+    "name": "arithmetic_mixed",
+    "execution_time_ms": 0.000852
+  },
+  {
+    "name": "list_concatenation",
+    "execution_time_ms": 0.002226
+  },
+  {
+    "name": "string_concatenation",
+    "execution_time_ms": 0.000875
+  },
+  {
+    "name": "variable_arithmetic",
+    "execution_time_ms": 0.000858
+  },
+  {
+    "name": "complex_arithmetic",
+    "execution_time_ms": 0.001597
+  },
+  {
+    "name": "list_arithmetic_combination",
+    "execution_time_ms": 0.001017
   }
 ]
