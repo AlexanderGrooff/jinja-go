@@ -56,7 +56,18 @@ type Token struct {
 	Position int
 }
 
-// List of operators ordered by increasing precedence
+// Operator precedence levels (higher means higher precedence)
+const (
+	PrecedenceOr      = 10
+	PrecedenceAnd     = 20
+	PrecedenceNot     = 30
+	PrecedenceCompare = 40
+	PrecedenceAdd     = 50
+	PrecedenceMul     = 60
+	PrecedencePow     = 70
+)
+
+// List of supported operators
 var operators = map[string]struct{}{
 	// Logical operators
 	"or":  {},
@@ -73,16 +84,28 @@ var operators = map[string]struct{}{
 	"**": {},
 }
 
-// Operator precedence - higher number means higher precedence
+// Operator precedence mapping
 var operatorPrecedence = map[string]int{
-	"or":  10,
-	"and": 20,
-	"not": 30,
-	"==":  40, "!=": 40, ">=": 40, "<=": 40, ">": 40, "<": 40,
-	"in": 40, "not in": 40, "is": 40, "is not": 40,
-	"+": 50, "-": 50,
-	"*": 60, "/": 60, "//": 60, "%": 60,
-	"**": 70,
+	"or":     PrecedenceOr,
+	"and":    PrecedenceAnd,
+	"not":    PrecedenceNot,
+	"==":     PrecedenceCompare,
+	"!=":     PrecedenceCompare,
+	">=":     PrecedenceCompare,
+	"<=":     PrecedenceCompare,
+	">":      PrecedenceCompare,
+	"<":      PrecedenceCompare,
+	"in":     PrecedenceCompare,
+	"not in": PrecedenceCompare,
+	"is":     PrecedenceCompare,
+	"is not": PrecedenceCompare,
+	"+":      PrecedenceAdd,
+	"-":      PrecedenceAdd,
+	"*":      PrecedenceMul,
+	"/":      PrecedenceMul,
+	"//":     PrecedenceMul,
+	"%":      PrecedenceMul,
+	"**":     PrecedencePow,
 }
 
 // ExprNodeType represents the type of AST node
@@ -113,15 +136,15 @@ type ExprNode struct {
 	FilterArgs []*ExprNode
 }
 
-// Lexer breaks input string into tokens
+// Lexer is responsible for breaking an input string into tokens for parsing Jinja expressions.
 type Lexer struct {
-	input      string
-	pos        int
-	currentPos int
-	tokens     []Token
+	input      string  // The input string to tokenize
+	pos        int     // Current position in the input
+	currentPos int     // Used for lookahead (not always needed)
+	tokens     []Token // Collected tokens
 }
 
-// NewLexer creates a new lexer instance
+// NewLexer creates a new lexer instance for the given input string.
 func NewLexer(input string) *Lexer {
 	return &Lexer{
 		input:      input,
@@ -131,12 +154,13 @@ func NewLexer(input string) *Lexer {
 	}
 }
 
-// Tokenize breaks the input string into tokens
+// Tokenize breaks the input string into a slice of tokens.
 func (l *Lexer) Tokenize() ([]Token, error) {
-	// Estimate token capacity - a good approximation is one token per 3-4 characters on average
+	// Estimate token capacity for performance
+	const minTokenCapacity = 8
 	estimatedCapacity := len(l.input) / 3
-	if estimatedCapacity < 8 {
-		estimatedCapacity = 8 // Minimum initial capacity
+	if estimatedCapacity < minTokenCapacity {
+		estimatedCapacity = minTokenCapacity
 	}
 
 	l.tokens = make([]Token, 0, estimatedCapacity)
@@ -148,41 +172,10 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 			continue
 		}
 
-		// Single-character tokens
-		switch l.input[l.pos] {
-		case '(':
-			l.addToken(TokenLeftParen, "(")
-			continue
-		case ')':
-			l.addToken(TokenRightParen, ")")
-			continue
-		case '[':
-			l.addToken(TokenLeftBracket, "[")
-			continue
-		case ']':
-			l.addToken(TokenRightBracket, "]")
-			continue
-		case '{':
-			l.addToken(TokenLeftBrace, "{")
-			continue
-		case '}':
-			l.addToken(TokenRightBrace, "}")
-			continue
-		case ',':
-			l.addToken(TokenComma, ",")
-			continue
-		case '.':
-			l.addToken(TokenDot, ".")
-			continue
-		case ':':
-			l.addToken(TokenColon, ":")
-			continue
-		case '|':
-			l.addToken(TokenPipe, "|")
+		if l.handleSingleCharToken() {
 			continue
 		}
 
-		// String literals
 		if l.input[l.pos] == '\'' || l.input[l.pos] == '"' {
 			if err := l.tokenizeString(); err != nil {
 				return nil, err
@@ -190,30 +183,62 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 			continue
 		}
 
-		// Numbers
 		if isDigit(l.input[l.pos]) {
 			l.tokenizeNumber()
 			continue
 		}
 
-		// If the next character is a letter or underscore, always tokenize as identifier/keyword
 		if isAlpha(l.input[l.pos]) || l.input[l.pos] == '_' {
 			l.tokenizeIdentifierOrKeyword()
 			continue
 		}
 
-		// Otherwise, try to tokenize as operator
 		if l.tryTokenizeOperator() {
 			continue
 		}
 
-		// If we get here, we encountered an unexpected character
 		return nil, fmt.Errorf("unexpected character '%c' at position %d", l.input[l.pos], l.pos)
 	}
 
-	// Add an EOF token
 	l.tokens = append(l.tokens, Token{Type: TokenEOF, Value: "", Position: len(l.input)})
 	return l.tokens, nil
+}
+
+// handleSingleCharToken checks for and tokenizes single-character tokens. Returns true if a token was found.
+func (l *Lexer) handleSingleCharToken() bool {
+	switch l.input[l.pos] {
+	case '(':
+		l.addToken(TokenLeftParen, "(")
+		return true
+	case ')':
+		l.addToken(TokenRightParen, ")")
+		return true
+	case '[':
+		l.addToken(TokenLeftBracket, "[")
+		return true
+	case ']':
+		l.addToken(TokenRightBracket, "]")
+		return true
+	case '{':
+		l.addToken(TokenLeftBrace, "{")
+		return true
+	case '}':
+		l.addToken(TokenRightBrace, "}")
+		return true
+	case ',':
+		l.addToken(TokenComma, ",")
+		return true
+	case '.':
+		l.addToken(TokenDot, ".")
+		return true
+	case ':':
+		l.addToken(TokenColon, ":")
+		return true
+	case '|':
+		l.addToken(TokenPipe, "|")
+		return true
+	}
+	return false
 }
 
 // addToken adds a token to the token list and advances position
@@ -385,14 +410,14 @@ func isAlphaNumeric(c byte) bool {
 	return isAlpha(c) || isDigit(c)
 }
 
-// Parser implements a LALR parser for Jinja expressions
+// ExprParser parses a sequence of tokens into an abstract syntax tree (AST) for Jinja expressions.
 type ExprParser struct {
-	tokens   []Token
-	pos      int
-	symTable map[string]int
+	tokens   []Token        // The list of tokens to parse
+	pos      int            // Current position in the token list
+	symTable map[string]int // Symbol table (not used in this implementation, but reserved for future use)
 }
 
-// NewParser creates a new Parser instance
+// NewExprParser creates a new parser for the given tokens.
 func NewExprParser(tokens []Token) *ExprParser {
 	return &ExprParser{
 		tokens:   tokens,
@@ -401,25 +426,22 @@ func NewExprParser(tokens []Token) *ExprParser {
 	}
 }
 
-// Parse converts tokens to an AST
+// Parse parses the tokens into an AST root node.
 func (p *ExprParser) Parse() (*ExprNode, error) {
 	return p.parseExpression(0)
 }
 
-// parseExpression parses an expression with given precedence
+// parseExpression parses an expression with the given precedence level.
 func (p *ExprParser) parseExpression(precedence int) (*ExprNode, error) {
-	var left *ExprNode
-	var err error
-
-	// Parse the left-hand side of the expression
 	if p.pos >= len(p.tokens) {
-		return nil, fmt.Errorf("unexpected end of expression")
+		return nil, fmt.Errorf("unexpected end of expression (at position %d)", p.pos)
 	}
 
+	var left *ExprNode
+	var err error
 	token := p.tokens[p.pos]
 	p.pos++
 
-	// Handle prefix operators and primary expressions
 	switch token.Type {
 	case TokenLiteral:
 		left, err = p.parseLiteral(token)
@@ -444,61 +466,52 @@ func (p *ExprParser) parseExpression(precedence int) (*ExprNode, error) {
 				Children: []*ExprNode{operand},
 			}
 		} else {
-			return nil, fmt.Errorf("unexpected operator: %s", token.Value)
+			return nil, fmt.Errorf("unexpected operator '%s' at position %d", token.Value, token.Position)
 		}
 	default:
-		return nil, fmt.Errorf("unexpected token: %s", token.Value)
+		return nil, fmt.Errorf("unexpected token '%s' at position %d", token.Value, token.Position)
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	// Handle postfix operators and infix operators
+	// Parse postfix and infix operators
 	for p.pos < len(p.tokens) {
-		if p.pos >= len(p.tokens) {
-			break
-		}
-
 		token = p.tokens[p.pos]
 
-		// Handle attribute access, subscript, or function call
-		if token.Type == TokenDot {
+		switch token.Type {
+		case TokenDot:
 			p.pos++
 			left, err = p.parseAttributeAccess(left)
-		} else if token.Type == TokenLeftBracket {
+		case TokenLeftBracket:
 			p.pos++
 			left, err = p.parseSubscriptAccess(left)
-		} else if token.Type == TokenLeftParen {
+		case TokenLeftParen:
 			p.pos++
 			left, err = p.parseFunctionCall(left)
-		} else if token.Type == TokenOperator {
-			// Process binary operators based on precedence
-			opToken := token
-			opPrecedence, ok := operatorPrecedence[opToken.Value]
+		case TokenOperator:
+			// Only process binary operators with sufficient precedence
+			opPrecedence, ok := operatorPrecedence[token.Value]
 			if !ok || opPrecedence < precedence {
-				break
+				return left, nil
 			}
-
 			p.pos++ // Consume the operator
-
-			// Parse the right-hand side with higher precedence
 			right, err := p.parseExpression(opPrecedence + 1)
 			if err != nil {
 				return nil, err
 			}
-
 			left = &ExprNode{
 				Type:     NodeBinaryOp,
-				Operator: opToken.Value,
+				Operator: token.Value,
 				Children: []*ExprNode{left, right},
 			}
-		} else if token.Type == TokenPipe {
-			// Filter chain support
+		case TokenPipe:
+			// Handle filter chains
 			for p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenPipe {
 				p.pos++ // Consume the pipe
 				if p.pos >= len(p.tokens) || p.tokens[p.pos].Type != TokenIdentifier {
-					return nil, fmt.Errorf("expected filter name after '|' in filter chain")
+					return nil, fmt.Errorf("expected filter name after '|' in filter chain at position %d", p.pos)
 				}
 				filterName := p.tokens[p.pos].Value
 				p.pos++ // Consume the filter name
@@ -507,7 +520,6 @@ func (p *ExprParser) parseExpression(precedence int) (*ExprNode, error) {
 				var filterArgs []*ExprNode
 				if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenLeftParen {
 					p.pos++ // Consume '('
-					// Parse arguments (comma-separated expressions)
 					if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenRightParen {
 						p.pos++ // Empty arg list
 					} else {
@@ -518,14 +530,14 @@ func (p *ExprParser) parseExpression(precedence int) (*ExprNode, error) {
 							}
 							filterArgs = append(filterArgs, arg)
 							if p.pos >= len(p.tokens) {
-								return nil, fmt.Errorf("unexpected end of filter arguments, expected ')' or ','")
+								return nil, fmt.Errorf("unexpected end of filter arguments, expected ')' or ',' at position %d", p.pos)
 							}
 							if p.tokens[p.pos].Type == TokenRightParen {
 								p.pos++ // Consume ')'
 								break
 							}
 							if p.tokens[p.pos].Type != TokenComma {
-								return nil, fmt.Errorf("expected ',' or ')', found %s", p.tokens[p.pos].Value)
+								return nil, fmt.Errorf("expected ',' or ')', found '%s' at position %d", p.tokens[p.pos].Value, p.pos)
 							}
 							p.pos++ // Consume ','
 						}
@@ -538,8 +550,8 @@ func (p *ExprParser) parseExpression(precedence int) (*ExprNode, error) {
 					FilterArgs: filterArgs,
 				}
 			}
-		} else {
-			break
+		default:
+			return left, nil
 		}
 
 		if err != nil {
@@ -790,33 +802,26 @@ func (p *ExprParser) parseDictLiteral() (*ExprNode, error) {
 	}, nil
 }
 
-// Evaluator evaluates an AST with a given context
+// Evaluator evaluates an AST for a Jinja expression using a provided context.
 type Evaluator struct {
-	context map[string]interface{}
+	context map[string]interface{} // The context for variable and function resolution
 }
 
-// NewEvaluator creates a new evaluator with a context
+// NewEvaluator creates a new evaluator with a merged context (user context + global functions).
 func NewEvaluator(context map[string]interface{}) *Evaluator {
-	// Create a new context map that includes the original context values
-	// and adds any global functions
 	mergedContext := make(map[string]interface{}, len(context)+len(GlobalFunctions))
-
-	// Copy all values from the original context
 	for k, v := range context {
 		mergedContext[k] = v
 	}
-
-	// Add global functions to the context - only if they don't already exist
 	for name, fn := range GlobalFunctions {
 		if _, exists := mergedContext[name]; !exists {
 			mergedContext[name] = fn
 		}
 	}
-
 	return &Evaluator{context: mergedContext}
 }
 
-// Evaluate evaluates an AST node with context
+// Evaluate recursively evaluates an AST node using the evaluator's context.
 func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 	if node == nil {
 		return nil, fmt.Errorf("cannot evaluate nil node")
@@ -825,238 +830,213 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 	switch node.Type {
 	case NodeLiteral:
 		return node.Value, nil
-
 	case NodeIdentifier:
 		value, exists := e.context[node.Identifier]
 		if !exists {
 			return nil, fmt.Errorf("variable '%s' is undefined", node.Identifier)
 		}
 		return value, nil
-
 	case NodeUnaryOp:
-		if len(node.Children) != 1 {
-			return nil, fmt.Errorf("unary operator '%s' requires exactly one operand", node.Operator)
-		}
-
-		operand, err := e.Evaluate(node.Children[0])
-		if err != nil {
-			return nil, err
-		}
-
-		switch node.Operator {
-		case "not":
-			return !IsTruthy(operand), nil
-		case "+":
-			// Unary plus - most types remain unchanged
-			return operand, nil
-		case "-":
-			// Unary minus - negate numeric values
-			return negateValue(operand)
-		default:
-			return nil, fmt.Errorf("unknown unary operator: %s", node.Operator)
-		}
-
+		return e.evalUnaryOp(node)
 	case NodeBinaryOp:
-		if len(node.Children) != 2 {
-			return nil, fmt.Errorf("binary operator '%s' requires exactly two operands", node.Operator)
-		}
-
-		// Get the left operand
-		left, err := e.Evaluate(node.Children[0])
-		if err != nil {
-			return nil, err
-		}
-
-		// Short-circuit evaluation for 'and' and 'or'
-		switch node.Operator {
-		case "and":
-			if !IsTruthy(left) {
-				return left, nil
-			}
-		case "or":
-			if IsTruthy(left) {
-				return left, nil
-			}
-		}
-
-		// Get the right operand
-		right, err := e.Evaluate(node.Children[1])
-		if err != nil {
-			return nil, err
-		}
-
-		// Handle the specific binary operator
-		switch node.Operator {
-		// Logical operators
-		case "and":
-			return right, nil // Left already evaluated and was truthy
-		case "or":
-			return right, nil // Left already evaluated and was falsy
-
-		// Equality operators
-		case "==":
-			return compare(left, right, OpEQ)
-		case "!=":
-			return compare(left, right, OpNE)
-
-		// Comparison operators
-		case "<":
-			return compare(left, right, OpLT)
-		case "<=":
-			return compare(left, right, OpLE)
-		case ">":
-			return compare(left, right, OpGT)
-		case ">=":
-			return compare(left, right, OpGE)
-
-		// Membership operators
-		case "in":
-			return checkMembership(right, left)
-		case "not in":
-			result, err := checkMembership(right, left)
-			if err != nil {
-				return nil, err
-			}
-			return !result.(bool), nil
-
-		// Identity operators
-		case "is":
-			// Use proper deep equality check
-			result := reflect.DeepEqual(left, right)
-			return result, nil
-		case "is not":
-			// Use proper deep equality check and negate the result
-			result := !reflect.DeepEqual(left, right)
-			return result, nil
-
-		// Mathematical operators
-		case "+":
-			return add(left, right)
-		case "-":
-			return subtract(left, right)
-		case "*":
-			return multiply(left, right)
-		case "/":
-			return divide(left, right)
-		case "//":
-			return floorDivide(left, right)
-		case "%":
-			return modulo(left, right)
-		case "**":
-			return power(left, right)
-
-		// Dictionary key-value separator (used in dict literals)
-		case ":":
-			// This is a special case used in dictionary construction
-			// Just return a tuple of the key and value
-			return []interface{}{left, right}, nil
-
-		default:
-			return nil, fmt.Errorf("unknown binary operator: %s", node.Operator)
-		}
-
+		return e.evalBinaryOp(node)
 	case NodeAttribute:
-		if len(node.Children) != 1 {
-			return nil, fmt.Errorf("attribute access requires an object")
-		}
-
-		obj, err := e.Evaluate(node.Children[0])
-		if err != nil {
-			return nil, err
-		}
-
-		return getAttributeValue(obj, node.Identifier)
-
+		return e.evalAttribute(node)
 	case NodeSubscript:
-		if len(node.Children) != 2 {
-			return nil, fmt.Errorf("subscript access requires an object and key")
-		}
-
-		obj, err := e.Evaluate(node.Children[0])
-		if err != nil {
-			return nil, err
-		}
-
-		key, err := e.Evaluate(node.Children[1])
-		if err != nil {
-			return nil, err
-		}
-
-		return getSubscriptValue(obj, key)
-
+		return e.evalSubscript(node)
 	case NodeFunctionCall:
 		return e.evaluateFunctionCall(node)
-
 	case NodeList:
-		// Evaluate each item in the list
-		var items []interface{}
-		for _, child := range node.Children {
-			item, err := e.Evaluate(child)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, item)
-		}
-		return items, nil
-
+		return e.evalList(node)
 	case NodeDict:
-		// Create a map from key-value pairs
-		dict := make(map[string]interface{})
-		for _, child := range node.Children {
-			if child.Type != NodeBinaryOp || child.Operator != ":" {
-				return nil, fmt.Errorf("invalid dictionary entry: expected key-value pair")
-			}
-
-			pair, err := e.Evaluate(child)
-			if err != nil {
-				return nil, err
-			}
-
-			keyValue, ok := pair.([]interface{})
-			if !ok || len(keyValue) != 2 {
-				return nil, fmt.Errorf("invalid dictionary entry format")
-			}
-
-			// In Jinja/Python, dictionary keys are usually strings, but can be any hashable type
-			// For simplicity, we'll convert all keys to strings here
-			key := fmt.Sprintf("%v", keyValue[0])
-			dict[key] = keyValue[1]
-		}
-		return dict, nil
-
+		return e.evalDict(node)
 	case NodeFilterChain:
-		// Evaluate the main expression first
-		mainExpr, err := e.Evaluate(node.Children[0])
-		if err != nil {
-			return nil, err
-		}
-
-		// Evaluate filter arguments
-		var args []interface{}
-		for _, argNode := range node.FilterArgs {
-			argVal, err := e.Evaluate(argNode)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, argVal)
-		}
-
-		// Look up the filter function
-		filterFunc, ok := GlobalFilters[node.FilterName]
-		if !ok {
-			return nil, fmt.Errorf("unknown filter '%s'", node.FilterName)
-		}
-
-		// Apply the filter
-		result, err := filterFunc(mainExpr, args...)
-		if err != nil {
-			return nil, fmt.Errorf("error applying filter '%s': %v", node.FilterName, err)
-		}
-		return result, nil
-
+		return e.evalFilterChain(node)
 	default:
 		return nil, fmt.Errorf("unknown node type: %v", node.Type)
 	}
+}
+
+// evalUnaryOp evaluates a unary operation node.
+func (e *Evaluator) evalUnaryOp(node *ExprNode) (interface{}, error) {
+	if len(node.Children) != 1 {
+		return nil, fmt.Errorf("unary operator '%s' requires exactly one operand", node.Operator)
+	}
+	operand, err := e.Evaluate(node.Children[0])
+	if err != nil {
+		return nil, err
+	}
+	switch node.Operator {
+	case "not":
+		return !IsTruthy(operand), nil
+	case "+":
+		return operand, nil
+	case "-":
+		return negateValue(operand)
+	default:
+		return nil, fmt.Errorf("unknown unary operator: %s", node.Operator)
+	}
+}
+
+// evalBinaryOp evaluates a binary operation node.
+func (e *Evaluator) evalBinaryOp(node *ExprNode) (interface{}, error) {
+	if len(node.Children) != 2 {
+		return nil, fmt.Errorf("binary operator '%s' requires exactly two operands", node.Operator)
+	}
+	left, err := e.Evaluate(node.Children[0])
+	if err != nil {
+		return nil, err
+	}
+	// Short-circuit for 'and' and 'or'
+	switch node.Operator {
+	case "and":
+		if !IsTruthy(left) {
+			return left, nil
+		}
+	case "or":
+		if IsTruthy(left) {
+			return left, nil
+		}
+	}
+	right, err := e.Evaluate(node.Children[1])
+	if err != nil {
+		return nil, err
+	}
+	switch node.Operator {
+	case "and":
+		return right, nil
+	case "or":
+		return right, nil
+	case "==":
+		return compare(left, right, OpEQ)
+	case "!=":
+		return compare(left, right, OpNE)
+	case "<":
+		return compare(left, right, OpLT)
+	case "<=":
+		return compare(left, right, OpLE)
+	case ">":
+		return compare(left, right, OpGT)
+	case ">=":
+		return compare(left, right, OpGE)
+	case "in":
+		return checkMembership(right, left)
+	case "not in":
+		result, err := checkMembership(right, left)
+		if err != nil {
+			return nil, err
+		}
+		return !result.(bool), nil
+	case "is":
+		return reflect.DeepEqual(left, right), nil
+	case "is not":
+		return !reflect.DeepEqual(left, right), nil
+	case "+":
+		return add(left, right)
+	case "-":
+		return subtract(left, right)
+	case "*":
+		return multiply(left, right)
+	case "/":
+		return divide(left, right)
+	case "//":
+		return floorDivide(left, right)
+	case "%":
+		return modulo(left, right)
+	case "**":
+		return power(left, right)
+	case ":":
+		return []interface{}{left, right}, nil
+	default:
+		return nil, fmt.Errorf("unknown binary operator: %s", node.Operator)
+	}
+}
+
+// evalAttribute evaluates an attribute access node (obj.attr).
+func (e *Evaluator) evalAttribute(node *ExprNode) (interface{}, error) {
+	if len(node.Children) != 1 {
+		return nil, fmt.Errorf("attribute access requires an object")
+	}
+	obj, err := e.Evaluate(node.Children[0])
+	if err != nil {
+		return nil, err
+	}
+	return getAttributeValue(obj, node.Identifier)
+}
+
+// evalSubscript evaluates a subscript access node (obj[key]).
+func (e *Evaluator) evalSubscript(node *ExprNode) (interface{}, error) {
+	if len(node.Children) != 2 {
+		return nil, fmt.Errorf("subscript access requires an object and key")
+	}
+	obj, err := e.Evaluate(node.Children[0])
+	if err != nil {
+		return nil, err
+	}
+	key, err := e.Evaluate(node.Children[1])
+	if err != nil {
+		return nil, err
+	}
+	return getSubscriptValue(obj, key)
+}
+
+// evalList evaluates a list literal node.
+func (e *Evaluator) evalList(node *ExprNode) (interface{}, error) {
+	var items []interface{}
+	for _, child := range node.Children {
+		item, err := e.Evaluate(child)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+// evalDict evaluates a dictionary literal node.
+func (e *Evaluator) evalDict(node *ExprNode) (interface{}, error) {
+	dict := make(map[string]interface{})
+	for _, child := range node.Children {
+		if child.Type != NodeBinaryOp || child.Operator != ":" {
+			return nil, fmt.Errorf("invalid dictionary entry: expected key-value pair")
+		}
+		pair, err := e.Evaluate(child)
+		if err != nil {
+			return nil, err
+		}
+		keyValue, ok := pair.([]interface{})
+		if !ok || len(keyValue) != 2 {
+			return nil, fmt.Errorf("invalid dictionary entry format")
+		}
+		key := fmt.Sprintf("%v", keyValue[0])
+		dict[key] = keyValue[1]
+	}
+	return dict, nil
+}
+
+// evalFilterChain evaluates a filter chain node.
+func (e *Evaluator) evalFilterChain(node *ExprNode) (interface{}, error) {
+	mainExpr, err := e.Evaluate(node.Children[0])
+	if err != nil {
+		return nil, err
+	}
+	var args []interface{}
+	for _, argNode := range node.FilterArgs {
+		argVal, err := e.Evaluate(argNode)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, argVal)
+	}
+	filterFunc, ok := GlobalFilters[node.FilterName]
+	if !ok {
+		return nil, fmt.Errorf("unknown filter '%s'", node.FilterName)
+	}
+	result, err := filterFunc(mainExpr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error applying filter '%s': %v", node.FilterName, err)
+	}
+	return result, nil
 }
 
 // Evaluate the function call node
