@@ -440,48 +440,43 @@ func extractVariablesFromAST(node *ExprNode, variableSet map[string]bool) {
 
 	switch node.Type {
 	case NodeIdentifier:
-		// This is a variable reference - add the root variable name
 		variableSet[node.Identifier] = true
-
 	case NodeAttribute:
-		// For attribute access like "item.name", we want the root variable "item"
 		if len(node.Children) > 0 {
 			extractVariablesFromAST(node.Children[0], variableSet)
 		}
-
 	case NodeSubscript:
-		// For subscript access like "item[0]", we want the root variable "item"
 		if len(node.Children) > 0 {
 			extractVariablesFromAST(node.Children[0], variableSet)
 		}
-		// Also check the subscript expression for variables
 		if len(node.Children) > 1 {
 			extractVariablesFromAST(node.Children[1], variableSet)
 		}
-
 	case NodeFunctionCall:
-		// For function calls, extract variables from arguments only, not the function name
-		// The first child is the function name/identifier, skip it
-		// Extract variables from arguments (children[1:])
-		for i := 1; i < len(node.Children); i++ {
-			extractVariablesFromAST(node.Children[i], variableSet)
+		for _, child := range node.Children[1:] {
+			extractVariablesFromAST(child, variableSet)
 		}
-
+	case NodeList, NodeTuple:
+		for _, child := range node.Children {
+			extractVariablesFromAST(child, variableSet)
+		}
+	case NodeDict:
+		for _, child := range node.Children {
+			extractVariablesFromAST(child, variableSet)
+		}
 	case NodeUnaryOp, NodeBinaryOp:
-		// For operators, extract variables from all operands
 		for _, child := range node.Children {
 			extractVariablesFromAST(child, variableSet)
 		}
-
-	case NodeList, NodeDict, NodeTuple:
-		// For collections, extract variables from all elements
-		for _, child := range node.Children {
-			extractVariablesFromAST(child, variableSet)
+	case NodeFilterChain:
+		// Main expression is first child
+		if len(node.Children) > 0 {
+			extractVariablesFromAST(node.Children[0], variableSet)
 		}
-
-	case NodeLiteral:
-		// Literals don't contain variables
-		return
+		// Filter arguments
+		for _, arg := range node.FilterArgs {
+			extractVariablesFromAST(arg, variableSet)
+		}
 	}
 }
 

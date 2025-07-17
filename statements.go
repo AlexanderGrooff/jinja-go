@@ -299,11 +299,46 @@ func handleForStatement(
 		}
 	}
 
-	// Prepare the results from iterating over the collection
-	var result strings.Builder
-
 	if keyValueUnpacking {
-		// For key-value unpacking, we need to handle maps differently
+		// For key-value unpacking, we need to handle different collection types
+		// Check if this is the result of an items filter (slice of key-value pairs)
+		if sliceVal, ok := collectionVal.([]interface{}); ok {
+			// Check if this looks like the result of an items filter
+			// Each element should be a slice with exactly 2 elements
+			isItemsFilterResult := true
+			for _, item := range sliceVal {
+				if pair, ok := item.([]interface{}); !ok || len(pair) != 2 {
+					isItemsFilterResult = false
+					break
+				}
+			}
+
+			if isItemsFilterResult {
+				// This is the result of an items filter - handle it directly
+				items := make([]struct {
+					Key   interface{}
+					Value interface{}
+				}, 0, len(sliceVal))
+
+				// Convert items filter result to key-value pairs
+				for _, item := range sliceVal {
+					pair := item.([]interface{})
+					items = append(items, struct {
+						Key   interface{}
+						Value interface{}
+					}{pair[0], pair[1]})
+				}
+
+				// Process the key-value pairs
+				renderedResult, err := processKeyValueLoop(items, keyVarName, valueVarName, bodyNodes, context, processBlockNodesFunc)
+				if err != nil {
+					return "", currentIndex, err
+				}
+				return renderedResult, endForIndex + 1, nil
+			}
+		}
+
+		// Try to convert to a map for other cases
 		mapVal, ok := collectionVal.(map[string]interface{})
 		if !ok {
 			// Try to convert to a map
@@ -327,38 +362,12 @@ func handleForStatement(
 			}{k, v})
 		}
 
-		// Create loop context for each iteration
-		for i, item := range items {
-			// Create a copy of the context for this iteration
-			iterContext := make(map[string]interface{})
-			for k, v := range context {
-				iterContext[k] = v
-			}
-
-			// Add the key and value variables to the context
-			iterContext[keyVarName] = item.Key
-			iterContext[valueVarName] = item.Value
-
-			// Add the 'loop' special variable with proper primitive types for index values
-			// to ensure they're evaluated correctly in templates
-			loopInfo := map[string]interface{}{
-				"index":     i + 1,              // 1-based index
-				"index0":    i,                  // 0-based index
-				"first":     i == 0,             // True if first iteration
-				"last":      i == len(items)-1,  // True if last iteration
-				"length":    len(items),         // Total number of items
-				"revindex":  len(items) - i,     // Reverse index (1-based)
-				"revindex0": len(items) - i - 1, // Reverse index (0-based)
-			}
-			iterContext["loop"] = loopInfo
-
-			// Process the body of the loop with this context
-			renderedNodes, err := processBlockNodesFunc(bodyNodes, iterContext)
-			if err != nil {
-				return "", currentIndex, fmt.Errorf("error processing for loop body: %v", err)
-			}
-			result.WriteString(renderedNodes)
+		// Process the key-value pairs
+		renderedResult, err := processKeyValueLoop(items, keyVarName, valueVarName, bodyNodes, context, processBlockNodesFunc)
+		if err != nil {
+			return "", currentIndex, err
 		}
+		return renderedResult, endForIndex + 1, nil
 	} else {
 		// Original behavior for simple item iteration
 		loopVarName := strings.TrimSpace(loopVarOrPair)
@@ -370,6 +379,7 @@ func handleForStatement(
 		}
 
 		// Create loop context for each iteration
+		var result strings.Builder
 		for i, item := range collection {
 			// Create a copy of the context for this iteration
 			iterContext := make(map[string]interface{})
@@ -400,33 +410,58 @@ func handleForStatement(
 			}
 			result.WriteString(renderedNodes)
 		}
-	}
 
-	return result.String(), endForIndex + 1, nil
+		return result.String(), endForIndex + 1, nil
+	}
 }
 
-// evaluateExprInContext evaluates an expression string in a given context
-// and returns the result as a string
-func evaluateExprInContext(expr string, context map[string]interface{}) (string, error) {
-	trimmedExpr := strings.TrimSpace(expr)
+// processKeyValueLoop is a helper function that processes a loop with key-value unpacking
+func processKeyValueLoop(
+	items []struct {
+		Key   interface{}
+		Value interface{}
+	},
+	keyVarName, valueVarName string,
+	bodyNodes []*Node,
+	context map[string]interface{},
+	processBlockNodesFunc ProcessNodesFunc,
+) (string, error) {
+	var result strings.Builder
 
-	// Try LALR parser first
-	result, err := ParseAndEvaluate(trimmedExpr, context)
-	if err == nil {
-		return fmt.Sprintf("%v", result), nil
+	// Create loop context for each iteration
+	for i, item := range items {
+		// Create a copy of the context for this iteration
+		iterContext := make(map[string]interface{})
+		for k, v := range context {
+			iterContext[k] = v
+		}
+
+		// Add the key and value variables to the context
+		iterContext[keyVarName] = item.Key
+		iterContext[valueVarName] = item.Value
+
+		// Add the 'loop' special variable with proper primitive types for index values
+		// to ensure they're evaluated correctly in templates
+		loopInfo := map[string]interface{}{
+			"index":     i + 1,              // 1-based index
+			"index0":    i,                  // 0-based index
+			"first":     i == 0,             // True if first iteration
+			"last":      i == len(items)-1,  // True if last iteration
+			"length":    len(items),         // Total number of items
+			"revindex":  len(items) - i,     // Reverse index (1-based)
+			"revindex0": len(items) - i - 1, // Reverse index (0-based)
+		}
+		iterContext["loop"] = loopInfo
+
+		// Process the body of the loop with this context
+		renderedNodes, err := processBlockNodesFunc(bodyNodes, iterContext)
+		if err != nil {
+			return "", err
+		}
+		result.WriteString(renderedNodes)
 	}
 
-	// Fall back to standard evaluation
-	result, wasUndef, err := evaluateFullExpressionInternal(trimmedExpr, context)
-	if err != nil {
-		return "", err
-	}
-
-	if wasUndef && result == nil {
-		return "", nil
-	}
-
-	return fmt.Sprintf("%v", result), nil
+	return result.String(), nil
 }
 
 // convertToSlice converts various types to a slice of interface{} for iteration

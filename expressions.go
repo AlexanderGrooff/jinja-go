@@ -99,6 +99,7 @@ const (
 	NodeList
 	NodeDict
 	NodeTuple
+	NodeFilterChain
 )
 
 // ExprNode represents a node in the expression AST
@@ -108,6 +109,8 @@ type ExprNode struct {
 	Children   []*ExprNode
 	Operator   string
 	Identifier string
+	FilterName string
+	FilterArgs []*ExprNode
 }
 
 // Lexer breaks input string into tokens
@@ -138,16 +141,15 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 
 	l.tokens = make([]Token, 0, estimatedCapacity)
 	l.pos = 0
-	input := strings.TrimSpace(l.input)
 
-	for l.pos < len(input) {
-		if isWhitespace(input[l.pos]) {
+	for l.pos < len(l.input) {
+		if isWhitespace(l.input[l.pos]) {
 			l.pos++
 			continue
 		}
 
 		// Single-character tokens
-		switch input[l.pos] {
+		switch l.input[l.pos] {
 		case '(':
 			l.addToken(TokenLeftParen, "(")
 			continue
@@ -181,7 +183,7 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 		}
 
 		// String literals
-		if input[l.pos] == '\'' || input[l.pos] == '"' {
+		if l.input[l.pos] == '\'' || l.input[l.pos] == '"' {
 			if err := l.tokenizeString(); err != nil {
 				return nil, err
 			}
@@ -189,28 +191,28 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 		}
 
 		// Numbers
-		if isDigit(input[l.pos]) {
+		if isDigit(l.input[l.pos]) {
 			l.tokenizeNumber()
 			continue
 		}
 
-		// Check for multi-character operators
-		if l.tryTokenizeOperator() {
-			continue
-		}
-
-		// Keywords and identifiers
-		if isAlpha(input[l.pos]) || input[l.pos] == '_' {
+		// If the next character is a letter or underscore, always tokenize as identifier/keyword
+		if isAlpha(l.input[l.pos]) || l.input[l.pos] == '_' {
 			l.tokenizeIdentifierOrKeyword()
 			continue
 		}
 
+		// Otherwise, try to tokenize as operator
+		if l.tryTokenizeOperator() {
+			continue
+		}
+
 		// If we get here, we encountered an unexpected character
-		return nil, fmt.Errorf("unexpected character '%c' at position %d", input[l.pos], l.pos)
+		return nil, fmt.Errorf("unexpected character '%c' at position %d", l.input[l.pos], l.pos)
 	}
 
 	// Add an EOF token
-	l.tokens = append(l.tokens, Token{Type: TokenEOF, Value: "", Position: len(input)})
+	l.tokens = append(l.tokens, Token{Type: TokenEOF, Value: "", Position: len(l.input)})
 	return l.tokens, nil
 }
 
@@ -282,54 +284,37 @@ func (l *Lexer) tryTokenizeOperator() bool {
 		}
 	}
 
-	// Try two-character operators
-	if l.pos+2 <= len(l.input) {
-		// Inline common two-character operators for faster matching
-		if l.input[l.pos] == '=' && l.input[l.pos+1] == '=' {
-			l.addToken(TokenOperator, "==")
-			return true
-		}
-		if l.input[l.pos] == '!' && l.input[l.pos+1] == '=' {
-			l.addToken(TokenOperator, "!=")
-			return true
-		}
-		if l.input[l.pos] == '>' && l.input[l.pos+1] == '=' {
-			l.addToken(TokenOperator, ">=")
-			return true
-		}
-		if l.input[l.pos] == '<' && l.input[l.pos+1] == '=' {
-			l.addToken(TokenOperator, "<=")
-			return true
-		}
-
-		// For less common operators, check the map
-		twoChars := l.input[l.pos : l.pos+2]
-		if _, found := operators[twoChars]; found {
-			l.addToken(TokenOperator, twoChars)
-			return true
-		}
-	}
-
-	// Try "is" operator - special case since it can be part of "is not"
+	// Try "is" operator - only match if not part of a longer identifier
 	if l.pos+2 <= len(l.input) && l.input[l.pos] == 'i' && l.input[l.pos+1] == 's' &&
-		(l.pos+2 >= len(l.input) || !isAlphaNumeric(l.input[l.pos+2])) {
+		(l.pos+2 == len(l.input) || !isAlphaNumeric(l.input[l.pos+2])) {
 		l.addToken(TokenOperator, "is")
 		return true
 	}
 
-	// Try single-character operators - inline common ones for performance
-	if l.pos < len(l.input) {
-		c := l.input[l.pos]
-		if c == '+' || c == '-' || c == '*' || c == '/' || c == '<' || c == '>' {
-			l.addToken(TokenOperator, string(c))
+	// Try "in" operator - only match if not part of a longer identifier
+	if l.pos+2 <= len(l.input) && l.input[l.pos] == 'i' && l.input[l.pos+1] == 'n' {
+		prevIsIdent := l.pos > 0 && isAlphaNumeric(l.input[l.pos-1])
+		nextIsIdent := l.pos+2 < len(l.input) && isAlphaNumeric(l.input[l.pos+2])
+		if !prevIsIdent && !nextIsIdent {
+			l.addToken(TokenOperator, "in")
 			return true
 		}
+	}
 
-		// For less common operators, check the map
-		if _, found := operators[string(c)]; found {
-			l.addToken(TokenOperator, string(c))
+	// Try two-character operators
+	if l.pos+1 < len(l.input) {
+		twoChar := string(l.input[l.pos : l.pos+2])
+		if _, exists := operators[twoChar]; exists {
+			l.addToken(TokenOperator, twoChar)
 			return true
 		}
+	}
+
+	// Try single-character operators
+	singleChar := string(l.input[l.pos])
+	if _, exists := operators[singleChar]; exists {
+		l.addToken(TokenOperator, singleChar)
+		return true
 	}
 
 	return false
@@ -338,18 +323,45 @@ func (l *Lexer) tryTokenizeOperator() bool {
 // tokenizeIdentifierOrKeyword handles identifiers and keywords
 func (l *Lexer) tokenizeIdentifierOrKeyword() {
 	start := l.pos
+
+	// First, check for multi-word operators that start with the current character
+	if l.pos+6 <= len(l.input) {
+		// Check for "is not" - must be at the start of a word
+		if l.input[l.pos] == 'i' && l.input[l.pos+1] == 's' && l.input[l.pos+2] == ' ' &&
+			l.input[l.pos+3] == 'n' && l.input[l.pos+4] == 'o' && l.input[l.pos+5] == 't' {
+			// Check that it's not part of a longer identifier
+			if l.pos+6 == len(l.input) || !isAlphaNumeric(l.input[l.pos+6]) {
+				l.addToken(TokenOperator, "is not")
+				return
+			}
+		}
+
+		// Check for "not in" - must be at the start of a word
+		if l.input[l.pos] == 'n' && l.input[l.pos+1] == 'o' && l.input[l.pos+2] == 't' &&
+			l.input[l.pos+3] == ' ' && l.input[l.pos+4] == 'i' && l.input[l.pos+5] == 'n' {
+			// Check that it's not part of a longer identifier
+			if l.pos+6 == len(l.input) || !isAlphaNumeric(l.input[l.pos+6]) {
+				l.addToken(TokenOperator, "not in")
+				return
+			}
+		}
+	}
+
+	// Read the word as before
 	for l.pos < len(l.input) && (isAlphaNumeric(l.input[l.pos]) || l.input[l.pos] == '_') {
 		l.pos++
 	}
 
 	word := l.input[start:l.pos]
 
-	// Check if it's a keyword operator
-	if _, found := operators[word]; found {
-		l.tokens = append(l.tokens, Token{Type: TokenOperator, Value: word, Position: start})
-	} else if word == "True" || word == "False" || word == "None" || word == "true" || word == "false" || word == "none" {
+	// Check if it's a keyword operator - only match exact keywords
+	// This prevents splitting identifiers like "interfaces" into "in" + "terfaces"
+	if word == "True" || word == "False" || word == "None" || word == "true" || word == "false" || word == "none" {
 		// Handle boolean literals and None
 		l.tokens = append(l.tokens, Token{Type: TokenLiteral, Value: word, Position: start})
+	} else if word == "and" || word == "or" || word == "not" || word == "in" || word == "is" {
+		// Only match exact operator keywords, not partial matches
+		l.tokens = append(l.tokens, Token{Type: TokenOperator, Value: word, Position: start})
 	} else {
 		// It's an identifier
 		l.tokens = append(l.tokens, Token{Type: TokenIdentifier, Value: word, Position: start})
@@ -480,6 +492,51 @@ func (p *ExprParser) parseExpression(precedence int) (*ExprNode, error) {
 				Type:     NodeBinaryOp,
 				Operator: opToken.Value,
 				Children: []*ExprNode{left, right},
+			}
+		} else if token.Type == TokenPipe {
+			// Filter chain support
+			for p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenPipe {
+				p.pos++ // Consume the pipe
+				if p.pos >= len(p.tokens) || p.tokens[p.pos].Type != TokenIdentifier {
+					return nil, fmt.Errorf("expected filter name after '|' in filter chain")
+				}
+				filterName := p.tokens[p.pos].Value
+				p.pos++ // Consume the filter name
+
+				// Parse filter arguments if present
+				var filterArgs []*ExprNode
+				if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenLeftParen {
+					p.pos++ // Consume '('
+					// Parse arguments (comma-separated expressions)
+					if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenRightParen {
+						p.pos++ // Empty arg list
+					} else {
+						for {
+							arg, err := p.parseExpression(0)
+							if err != nil {
+								return nil, err
+							}
+							filterArgs = append(filterArgs, arg)
+							if p.pos >= len(p.tokens) {
+								return nil, fmt.Errorf("unexpected end of filter arguments, expected ')' or ','")
+							}
+							if p.tokens[p.pos].Type == TokenRightParen {
+								p.pos++ // Consume ')'
+								break
+							}
+							if p.tokens[p.pos].Type != TokenComma {
+								return nil, fmt.Errorf("expected ',' or ')', found %s", p.tokens[p.pos].Value)
+							}
+							p.pos++ // Consume ','
+						}
+					}
+				}
+				left = &ExprNode{
+					Type:       NodeFilterChain,
+					Children:   []*ExprNode{left},
+					FilterName: filterName,
+					FilterArgs: filterArgs,
+				}
 			}
 		} else {
 			break
@@ -811,11 +868,12 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 		}
 
 		// Short-circuit evaluation for 'and' and 'or'
-		if node.Operator == "and" {
+		switch node.Operator {
+		case "and":
 			if !IsTruthy(left) {
 				return left, nil
 			}
-		} else if node.Operator == "or" {
+		case "or":
 			if IsTruthy(left) {
 				return left, nil
 			}
@@ -965,6 +1023,36 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 			dict[key] = keyValue[1]
 		}
 		return dict, nil
+
+	case NodeFilterChain:
+		// Evaluate the main expression first
+		mainExpr, err := e.Evaluate(node.Children[0])
+		if err != nil {
+			return nil, err
+		}
+
+		// Evaluate filter arguments
+		var args []interface{}
+		for _, argNode := range node.FilterArgs {
+			argVal, err := e.Evaluate(argNode)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, argVal)
+		}
+
+		// Look up the filter function
+		filterFunc, ok := GlobalFilters[node.FilterName]
+		if !ok {
+			return nil, fmt.Errorf("unknown filter '%s'", node.FilterName)
+		}
+
+		// Apply the filter
+		result, err := filterFunc(mainExpr, args...)
+		if err != nil {
+			return nil, fmt.Errorf("error applying filter '%s': %v", node.FilterName, err)
+		}
+		return result, nil
 
 	default:
 		return nil, fmt.Errorf("unknown node type: %v", node.Type)

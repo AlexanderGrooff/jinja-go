@@ -879,9 +879,9 @@ func TestCompareExpressionEvaluators(t *testing.T) {
 			name:          "dot notation with comparison",
 			expression:    "loop.index > 1",
 			context:       map[string]interface{}{"loop": map[string]interface{}{"index": 2}},
-			wantBothEqual: false, // ParseAndEvaluate doesn't directly support dot notation in comparisons
+			wantBothEqual: true, // Now expect both to succeed and match
 			wantErr:       false,
-			parseErr:      true, // We expect ParseAndEvaluate to error
+			parseErr:      false, // No longer expect ParseAndEvaluate to error
 		},
 		{
 			name:          "not with dot notation",
@@ -2325,6 +2325,12 @@ func TestParseVariables(t *testing.T) {
 			want:     []string{"value", "user"},
 			wantErr:  false,
 		},
+		{
+			name:     "complex expression",
+			template: "{{ (interfaces + (lookup('template', 'arista_interfaces.yaml.j2') | from_yaml or [])) | sort_interfaces }}",
+			want:     []string{"interfaces"},
+			wantErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2428,4 +2434,100 @@ func TestTemplateString_ForLoopWithListLiteral(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLALRParserComplexExpression(t *testing.T) {
+	// Test that the LALR parser can now handle the complex expression
+	expression := "(interfaces + (lookup('template', 'arista_interfaces.yaml.j2') | from_yaml or [])) | sort_interfaces"
+
+	// Test tokenization
+	lexer := NewLexer(expression)
+	tokens, err := lexer.Tokenize()
+	if err != nil {
+		t.Fatalf("Tokenization failed: %v", err)
+	}
+
+	// Print all tokens for debugging
+	t.Log("Tokens:")
+	for i, token := range tokens {
+		t.Logf("  %d: %s (%v)", i, token.Value, token.Type)
+	}
+
+	// Verify that "interfaces" is tokenized as a single identifier
+	foundInterfaces := false
+	for _, token := range tokens {
+		if token.Value == "interfaces" && token.Type == TokenIdentifier {
+			foundInterfaces = true
+			break
+		}
+	}
+
+	if !foundInterfaces {
+		t.Error("Expected 'interfaces' to be tokenized as a single identifier")
+	}
+
+	// Test parsing
+	parser := NewExprParser(tokens)
+	ast, err := parser.Parse()
+	if err != nil {
+		t.Logf("Parsing failed: %v", err)
+		t.Logf("Expression: %s", expression)
+		t.Logf("Tokens: %v", tokens)
+		t.Fatalf("Parsing failed: %v", err)
+	}
+
+	// Test variable extraction
+	variableSet := make(map[string]bool)
+	extractVariablesFromAST(ast, variableSet)
+
+	// Should only extract "interfaces" as a variable
+	if len(variableSet) != 1 || !variableSet["interfaces"] {
+		t.Errorf("Expected only 'interfaces' as variable, got: %v", variableSet)
+	}
+}
+
+func TestDebugIsNotOperator(t *testing.T) {
+	// Test the failing expression
+	expr := "'a' is not 'b'"
+
+	t.Logf("Testing expression: %s", expr)
+
+	// Test tokenization
+	lexer := NewLexer(expr)
+	tokens, err := lexer.Tokenize()
+	if err != nil {
+		t.Fatalf("Tokenization failed: %v", err)
+	}
+
+	t.Log("Tokens:")
+	for i, token := range tokens {
+		t.Logf("  %d: %s (%v)", i, token.Value, token.Type)
+	}
+
+	// Test parsing
+	parser := NewExprParser(tokens)
+	ast, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Parsing failed: %v", err)
+	}
+
+	t.Logf("AST root type: %v", ast.Type)
+	if ast.Type == NodeBinaryOp {
+		t.Logf("Operator: %s", ast.Operator)
+		t.Logf("Left child type: %v", ast.Children[0].Type)
+		t.Logf("Right child type: %v", ast.Children[1].Type)
+	}
+
+	// Test evaluation
+	evaluator := NewEvaluator(map[string]interface{}{})
+	result, err := evaluator.Evaluate(ast)
+	if err != nil {
+		t.Fatalf("Evaluation failed: %v", err)
+	}
+
+	t.Logf("Result: %v (%T)", result, result)
+
+	// Test with ParseAndEvaluate
+	result2, err2 := ParseAndEvaluate(expr, map[string]interface{}{})
+	t.Logf("ParseAndEvaluate result: %v, error: %v", result2, err2)
 }
