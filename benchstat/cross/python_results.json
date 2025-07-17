@@ -1,54 +1,54 @@
 [
   {
     "name": "simple_variable",
-    "execution_time_ms": 0.0059428572654724125
+    "execution_time_ms": 0.005563809871673584
   },
   {
     "name": "multiple_variables",
-    "execution_time_ms": 0.00664137601852417
+    "execution_time_ms": 0.00661745548248291
   },
   {
     "name": "conditional",
-    "execution_time_ms": 0.00581179141998291
+    "execution_time_ms": 0.005934231281280518
   },
   {
     "name": "nested_access",
-    "execution_time_ms": 0.006725003719329834
+    "execution_time_ms": 0.006650362014770508
   },
   {
     "name": "filter_usage",
-    "execution_time_ms": 0.006552708148956299
+    "execution_time_ms": 0.0062642526626586915
   },
   {
     "name": "complex_template",
-    "execution_time_ms": 0.012727088928222656
+    "execution_time_ms": 0.012025799751281738
   },
   {
     "name": "deep_nesting",
-    "execution_time_ms": 0.008623394966125488
+    "execution_time_ms": 0.008096182346343994
   },
   {
     "name": "nested_loops",
-    "execution_time_ms": 0.021276707649230956
+    "execution_time_ms": 0.02037134885787964
   },
   {
     "name": "string_manipulation",
-    "execution_time_ms": 0.006141951084136963
+    "execution_time_ms": 0.005970089435577392
   },
   {
     "name": "complex_conditional",
-    "execution_time_ms": 0.007843389511108398
+    "execution_time_ms": 0.007408199310302735
   },
   {
     "name": "items_filter",
-    "execution_time_ms": 0.011797804832458497
+    "execution_time_ms": 0.011195440292358399
   },
   {
     "name": "map_get_method",
-    "execution_time_ms": 0.006247899532318115
+    "execution_time_ms": 0.0058957266807556155
   },
   {
     "name": "list_literal_iteration",
-    "execution_time_ms": 0.009185116291046142
+    "execution_time_ms": 0.009224681854248047
   }
 ]

@@ -205,36 +205,14 @@ func EvaluateExpression(expression string, context map[string]interface{}) (inte
 		}
 	}
 
-	// First try with the LALR parser for complex expressions
-	// If the expression contains operators, attributes, or is a compound expression, this will handle it
+	// Try with the LALR parser for all expressions
+	// This handles dot notation, operators, complex expressions, etc.
 	val, err := ParseAndEvaluate(trimmedExpression, context)
 	if err == nil {
 		return val, nil
 	}
 
-	// Special handling for expressions with dot notation and any operators
-	if strings.Contains(trimmedExpression, ".") {
-		result, err := evaluateExpressionWithDotNotation(trimmedExpression, context)
-		if err == nil {
-			return result, nil
-		}
-	}
-
-	// If the expression contains attribute access or is complex, try ParseAndEvaluate next
-	if strings.Contains(trimmedExpression, ".") ||
-		strings.Contains(trimmedExpression, "[") ||
-		strings.Contains(trimmedExpression, ">") ||
-		strings.Contains(trimmedExpression, "<") ||
-		strings.Contains(trimmedExpression, "!") ||
-		strings.Contains(trimmedExpression, "==") ||
-		strings.Contains(trimmedExpression, " not ") {
-		val, err = ParseAndEvaluate(trimmedExpression, context)
-		if err == nil {
-			return val, nil
-		}
-	}
-
-	// Fall back to the old evaluator for simpler expressions with filters
+	// Fall back to the old evaluator for expressions that the LALR parser couldn't handle
 	val, wasStrictlyUndefined, err := evaluateFullExpressionInternal(trimmedExpression, context) // from parser.go
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate expression '%s': %v", expression, err)
@@ -247,63 +225,6 @@ func EvaluateExpression(expression string, context map[string]interface{}) (inte
 	}
 
 	return val, nil
-}
-
-// For more complex expressions with dot notation, we can do a substitution approach:
-// 1. Find all dot notation variables in the expression
-// 2. Replace them with their evaluated values
-// 3. Then evaluate the resulting expression with ParseAndEvaluate
-func evaluateExpressionWithDotNotation(expr string, context map[string]interface{}) (interface{}, error) {
-	// Handle simple dot notation without any operators first
-	if !strings.Contains(expr, " ") && strings.Contains(expr, ".") {
-		return evaluateDotNotation(expr, context)
-	}
-
-	// Handle "not" prefix for dot notation
-	if strings.HasPrefix(expr, "not ") {
-		varName := strings.TrimSpace(strings.TrimPrefix(expr, "not "))
-		if strings.Contains(varName, ".") && !strings.Contains(varName, " ") {
-			val, err := evaluateDotNotation(varName, context)
-			if err == nil && val != nil {
-				return !IsTruthy(val), nil
-			}
-		}
-	}
-
-	// Use regex to find all dot notation variables in the expression
-	dotNotationPattern := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)`)
-	matches := dotNotationPattern.FindAllString(expr, -1)
-
-	// If we found dot notation variables, replace them with their values
-	if len(matches) > 0 {
-		tempExpr := expr
-		for _, match := range matches {
-			// Evaluate the dot notation
-			val, err := evaluateDotNotation(match, context)
-			if err != nil {
-				return nil, fmt.Errorf("error evaluating dot notation '%s': %v", match, err)
-			}
-
-			// Replace the variable with its literal value
-			// This is a simplistic approach that doesn't handle all edge cases
-			var replacement string
-			switch v := val.(type) {
-			case string:
-				replacement = fmt.Sprintf("'%s'", v)
-			default:
-				replacement = fmt.Sprintf("%v", v)
-			}
-
-			// Use regex to ensure we only replace the exact matches
-			tempExpr = regexp.MustCompile(regexp.QuoteMeta(match)).ReplaceAllString(tempExpr, replacement)
-		}
-
-		// Now evaluate the expression with literals instead of dot notation
-		return ParseAndEvaluate(tempExpr, context)
-	}
-
-	// If no dot notation was found, just evaluate normally
-	return ParseAndEvaluate(expr, context)
 }
 
 // ParseAll parses the entire template into a slice of nodes.
