@@ -891,3 +891,46 @@ func TestLALRParser(t *testing.T) {
 		})
 	}
 }
+
+func TestParseVariablesFromExpression(t *testing.T) {
+	tests := []struct {
+		expr    string
+		want    []string
+		wantErr bool
+	}{
+		{expr: "item", want: []string{"item"}},
+		{expr: "item.some_key", want: []string{"item"}},
+		{expr: "item.some_bool and another_item", want: []string{"item", "another_item"}},
+		{expr: "foo.bar.baz or bar", want: []string{"foo", "bar"}},
+		{expr: "foo['bar']", want: []string{"foo"}},
+		{expr: "foo[0]", want: []string{"foo"}},
+		{expr: "foo | default('bar')", want: []string{"foo"}},
+		{expr: "42", want: []string{}},
+		{expr: "'string'", want: []string{}},
+		{expr: "True and False", want: []string{}},
+		{expr: "item + another_item * 2", want: []string{"item", "another_item"}},
+		{expr: "(item or bar) and baz", want: []string{"item", "bar", "baz"}},
+		{expr: "", want: []string{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expr, func(t *testing.T) {
+			got, err := ParseVariablesFromExpression(tt.expr)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// Compare as sets (order doesn't matter)
+			gotSet := make(map[string]struct{})
+			for _, v := range got {
+				gotSet[v] = struct{}{}
+			}
+			wantSet := make(map[string]struct{})
+			for _, v := range tt.want {
+				wantSet[v] = struct{}{}
+			}
+			if !reflect.DeepEqual(gotSet, wantSet) {
+				t.Errorf("ParseVariablesFromExpression(%q) = %v, want %v", tt.expr, got, tt.want)
+			}
+		})
+	}
+}

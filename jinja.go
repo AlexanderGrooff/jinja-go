@@ -283,6 +283,22 @@ func ParseVariables(template string) ([]string, error) {
 	return variables, nil
 }
 
+// ParseVariablesFromExpression extracts all root Jinja variable names from a Jinja expression string.
+// For example, for the expression `item.some_key`, it returns ["item"].
+// For `item.some_bool and another_item`, it returns ["item", "another_item"].
+func ParseVariablesFromExpression(expression string) ([]string, error) {
+	variableSet := make(map[string]bool)
+	err := extractVariablesFromExpression(expression, variableSet)
+	if err != nil {
+		return nil, err
+	}
+	variables := make([]string, 0, len(variableSet))
+	for varName := range variableSet {
+		variables = append(variables, varName)
+	}
+	return variables, nil
+}
+
 // extractVariablesFromNodes recursively extracts variable names from a slice of nodes
 func extractVariablesFromNodes(nodes []*Node, variableSet map[string]bool) error {
 	for _, node := range nodes {
