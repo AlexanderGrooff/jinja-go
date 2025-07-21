@@ -92,7 +92,8 @@ func TestParseAndEvaluate(t *testing.T) {
 			name:      "undefined variable",
 			expr:      "undefined_var",
 			context:   map[string]interface{}{},
-			wantError: true,
+			want:      Undefined,
+			wantError: false,
 		},
 
 		// Unary operators
@@ -557,6 +558,55 @@ func TestParseAndEvaluate(t *testing.T) {
 			context: map[string]interface{}{},
 			want:    "a a",
 		},
+		// Jinja 'is defined' and 'is not defined' tests
+		{
+			name:    "is defined with defined variable",
+			expr:    "foo is defined",
+			context: map[string]interface{}{"foo": 123},
+			want:    true,
+		},
+		{
+			name:    "is defined with nested dict variable",
+			expr:    "foo.bar is defined",
+			context: map[string]interface{}{"foo": map[string]interface{}{"bar": 123}},
+			want:    true,
+		},
+		{
+			name:    "is defined with undefined variable",
+			expr:    "bar is defined",
+			context: map[string]interface{}{},
+			want:    false,
+		},
+		{
+			name:    "is defined with undefined nested dict variable",
+			expr:    "foo.bar is defined",
+			context: map[string]interface{}{"foo": map[string]interface{}{}},
+			want:    false,
+		},
+		{
+			name:    "is not defined with defined variable",
+			expr:    "foo is not defined",
+			context: map[string]interface{}{"foo": 123},
+			want:    false,
+		},
+		{
+			name:    "is not defined with nested dict variable",
+			expr:    "foo.bar is not defined",
+			context: map[string]interface{}{"foo": map[string]interface{}{"bar": 123}},
+			want:    false,
+		},
+		{
+			name:    "is not defined with undefined variable",
+			expr:    "bar is not defined",
+			context: map[string]interface{}{},
+			want:    true,
+		},
+		{
+			name:    "is not defined with undefined nested dict variable",
+			expr:    "foo.bar is not defined",
+			context: map[string]interface{}{"foo": map[string]interface{}{}},
+			want:    true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -859,10 +909,11 @@ func TestLALRParser(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "Undefined variable",
-			expr:    "undefined_var",
-			context: map[string]interface{}{},
-			wantErr: true,
+			name:     "Undefined variable",
+			expr:     "undefined_var",
+			context:  map[string]interface{}{},
+			expected: Undefined,
+			wantErr:  false,
 		},
 	}
 

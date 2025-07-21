@@ -833,7 +833,7 @@ func (e *Evaluator) Evaluate(node *ExprNode) (interface{}, error) {
 	case NodeIdentifier:
 		value, exists := e.context[node.Identifier]
 		if !exists {
-			return nil, fmt.Errorf("variable '%s' is undefined", node.Identifier)
+			return Undefined, nil
 		}
 		return value, nil
 	case NodeUnaryOp:
@@ -883,9 +883,13 @@ func (e *Evaluator) evalBinaryOp(node *ExprNode) (interface{}, error) {
 	if len(node.Children) != 2 {
 		return nil, fmt.Errorf("binary operator '%s' requires exactly two operands", node.Operator)
 	}
-	left, err := e.Evaluate(node.Children[0])
-	if err != nil {
-		return nil, err
+	left, leftErr := e.Evaluate(node.Children[0])
+	if (node.Operator == "is" || node.Operator == "is not") && leftErr != nil {
+		left = Undefined
+		leftErr = nil
+	}
+	if leftErr != nil {
+		return nil, leftErr
 	}
 	// Short-circuit for 'and' and 'or'
 	switch node.Operator {
@@ -898,10 +902,15 @@ func (e *Evaluator) evalBinaryOp(node *ExprNode) (interface{}, error) {
 			return left, nil
 		}
 	}
-	right, err := e.Evaluate(node.Children[1])
-	if err != nil {
-		return nil, err
+	right, rightErr := e.Evaluate(node.Children[1])
+	if (node.Operator == "is" || node.Operator == "is not") && rightErr != nil {
+		right = Undefined
+		rightErr = nil
 	}
+	if rightErr != nil {
+		return nil, rightErr
+	}
+
 	switch node.Operator {
 	case "and":
 		return right, nil
@@ -928,8 +937,23 @@ func (e *Evaluator) evalBinaryOp(node *ExprNode) (interface{}, error) {
 		}
 		return !result.(bool), nil
 	case "is":
+		// Generic Jinja test system
+		if testIdent, ok := node.Children[1], node.Children[1].Type == NodeIdentifier; ok {
+			testName := testIdent.Identifier
+			if testFunc, exists := GlobalTests[testName]; exists {
+				result, err := testFunc(left)
+				return result, err
+			}
+		}
 		return reflect.DeepEqual(left, right), nil
 	case "is not":
+		if testIdent, ok := node.Children[1], node.Children[1].Type == NodeIdentifier; ok {
+			testName := testIdent.Identifier
+			if testFunc, exists := GlobalTests[testName]; exists {
+				result, err := testFunc(left)
+				return !result, err
+			}
+		}
 		return !reflect.DeepEqual(left, right), nil
 	case "+":
 		return add(left, right)
@@ -1331,3 +1355,10 @@ func evaluateDotNotation(dotNotation string, context map[string]interface{}) (in
 
 	return obj, nil
 }
+
+// UndefinedType is a sentinel type for undefined variables in Jinja expressions
+// It is used to distinguish between nil (which is a valid value) and undefined (which is not set in context)
+type UndefinedType struct{}
+
+// Undefined is the singleton value representing an undefined variable
+var Undefined = UndefinedType{}

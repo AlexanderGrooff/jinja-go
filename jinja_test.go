@@ -317,8 +317,8 @@ func TestEvaluateExpression(t *testing.T) {
 			name:       "variable not in context",
 			expression: "city",
 			context:    map[string]interface{}{"name": "User"},
-			want:       nil,
-			wantErr:    true,
+			want:       Undefined,
+			wantErr:    false,
 		},
 		{
 			name:       "empty expression string",
@@ -410,8 +410,8 @@ func TestEvaluateExpression(t *testing.T) {
 			name:       "evaluate strictly undefined variable (error case for EvaluateExpression)",
 			expression: "strictly_undefined_var",
 			context:    map[string]interface{}{},
-			want:       nil,
-			wantErr:    true,
+			want:       Undefined,
+			wantErr:    false,
 		},
 		// Dot Notation Expression Tests
 		{
@@ -855,8 +855,8 @@ func TestCompareExpressionEvaluators(t *testing.T) {
 			name:          "undefined variable",
 			expression:    "missing",
 			context:       map[string]interface{}{"name": "Jinja"},
-			wantBothEqual: false, // Both will error, but with different messages
-			wantErr:       true,
+			wantBothEqual: true,
+			wantErr:       false,
 			parseErr:      false,
 		},
 		{

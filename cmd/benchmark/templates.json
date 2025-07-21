@@ -134,5 +134,12 @@
     "context": {
       "my_var": "four"
     }
+  },
+  {
+    "name": "is_defined_test",
+    "template": "{% if my_var is defined %}{{ my_var }}{% else %}Not defined{% endif %}",
+    "context": {
+      "my_var": 123
+    }
   }
 ] 

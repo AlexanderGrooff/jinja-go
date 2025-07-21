@@ -15,6 +15,8 @@ func IsTruthy(value interface{}) bool {
 	}
 
 	switch v := value.(type) {
+	case UndefinedType:
+		return false
 	case bool:
 		return v
 	case int:

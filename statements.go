@@ -74,7 +74,7 @@ func handleIfStatement(
 		if branchType == ControlIf || branchType == ControlElseIf {
 			if !conditionMet { // Only evaluate if no prior condition was met
 				conditionResult, evalErr := evalExprFunc(branchExpression, context)
-				if evalErr != nil {
+				if evalErr != nil || conditionResult == Undefined {
 					return "", currentIndex, fmt.Errorf("error evaluating condition for %s '%s': %v", branchType, branchExpression, evalErr)
 				}
 				truthy := IsTruthy(conditionResult)
