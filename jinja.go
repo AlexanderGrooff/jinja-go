@@ -401,9 +401,21 @@ func extractVariablesFromAST(node *ExprNode, variableSet map[string]bool) {
 		for _, child := range node.Children {
 			extractVariablesFromAST(child, variableSet)
 		}
-	case NodeUnaryOp, NodeBinaryOp:
+	case NodeUnaryOp:
 		for _, child := range node.Children {
 			extractVariablesFromAST(child, variableSet)
+		}
+	case NodeBinaryOp:
+		extractVariablesFromAST(node.Children[0], variableSet)
+
+		// Only extract variables from the right hand side of the expression
+		// on 'is' or 'is not', if it's not a test function like 'defined'
+		if node.Operator == "is" || node.Operator == "is not" {
+			if _, ok := GlobalTests[node.Children[1].Identifier]; !ok {
+				extractVariablesFromAST(node.Children[1], variableSet)
+			}
+		} else {
+			extractVariablesFromAST(node.Children[1], variableSet)
 		}
 	case NodeFilterChain:
 		// Main expression is first child
@@ -448,6 +460,10 @@ func extractVariablesWithRegex(expression string, variableSet map[string]bool) e
 	matches := identifierPattern.FindAllString(expression, -1)
 
 	for _, match := range matches {
+		// Skip test functions like 'defined'
+		if _, ok := GlobalTests[match]; ok {
+			continue
+		}
 		// Skip common keywords and literals
 		switch match {
 		case "True", "False", "None", "true", "false", "none", "null",

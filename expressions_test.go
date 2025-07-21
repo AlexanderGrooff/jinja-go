@@ -962,6 +962,10 @@ func TestParseVariablesFromExpression(t *testing.T) {
 		{expr: "item + another_item * 2", want: []string{"item", "another_item"}},
 		{expr: "(item or bar) and baz", want: []string{"item", "bar", "baz"}},
 		{expr: "", want: []string{}},
+		{expr: "foo is defined", want: []string{"foo"}},
+		{expr: "foo is not defined", want: []string{"foo"}},
+		{expr: "foo is bar", want: []string{"foo", "bar"}},
+		{expr: "foo is not bar", want: []string{"foo", "bar"}},
 	}
 
 	for _, tt := range tests {

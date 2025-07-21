@@ -2331,6 +2331,24 @@ func TestParseVariables(t *testing.T) {
 			want:     []string{"interfaces"},
 			wantErr:  false,
 		},
+		{
+			name:     "is defined expression",
+			template: "{{ foo is defined }}",
+			want:     []string{"foo"},
+			wantErr:  false,
+		},
+		{
+			name:     "is not defined expression",
+			template: "{{ foo is not defined }}",
+			want:     []string{"foo"},
+			wantErr:  false,
+		},
+		{
+			name:     "is equal to expression",
+			template: "{{ foo is bar }}",
+			want:     []string{"foo", "bar"},
+			wantErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
