@@ -2,6 +2,7 @@ package jinja
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -99,8 +100,8 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 						// nil values render as empty strings
 						// Do nothing, no output
 					default:
-						// For all other types, use fmt.Sprintf to get a string representation
-						result.WriteString(fmt.Sprintf("%v", v))
+						// Use the generic Python-style formatter for all types
+						result.WriteString(formatPythonStyle(v))
 					}
 					currentIndex++
 					continue
@@ -128,16 +129,9 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 			case nil:
 				// nil values render as empty strings
 				// Do nothing, no output
-			case []interface{}:
-				// Special handling for slices to match Jinja's behavior of concatenating items
-				var strItems []string
-				for _, item := range v {
-					strItems = append(strItems, fmt.Sprintf("%v", item))
-				}
-				result.WriteString(strings.Join(strItems, ""))
 			default:
-				// For all other types, use fmt.Sprintf to get a string representation
-				result.WriteString(fmt.Sprintf("%v", v))
+				// Use the generic Python-style formatter for all types
+				result.WriteString(formatPythonStyle(v))
 			}
 			currentIndex++
 
@@ -479,4 +473,87 @@ func extractVariablesWithRegex(expression string, variableSet map[string]bool) e
 	}
 
 	return nil
+}
+
+// formatPythonStyle formats any value in Python-style string representation
+// e.g., [1, "abc", true] -> "[1, \"abc\", true]"
+// e.g., {"a": 1, "b": true} -> "{\"a\": 1, \"b\": true}"
+func formatPythonStyle(val interface{}) string {
+	if val == nil {
+		return "null"
+	}
+
+	switch v := val.(type) {
+	case string:
+		// Quote strings
+		return fmt.Sprintf("%q", v)
+	case bool:
+		// Boolean values as lowercase
+		return fmt.Sprintf("%t", v)
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		// Integer types
+		return fmt.Sprintf("%v", v)
+	case float32, float64:
+		// Float types
+		return fmt.Sprintf("%v", v)
+	case []interface{}:
+		// Lists
+		if len(v) == 0 {
+			return "[]"
+		}
+		var parts []string
+		for _, item := range v {
+			parts = append(parts, formatPythonStyle(item))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	case map[string]interface{}:
+		// Dictionaries
+		if len(v) == 0 {
+			return "{}"
+		}
+		var parts []string
+		// Don't sort keys - preserve the order as they appear in the dictionary literal
+		for key, value := range v {
+			parts = append(parts, fmt.Sprintf("%q: %s", key, formatPythonStyle(value)))
+		}
+		return "{" + strings.Join(parts, ", ") + "}"
+	default:
+		// Use reflection for other types
+		rv := reflect.ValueOf(val)
+		switch rv.Kind() {
+		case reflect.Slice, reflect.Array:
+			// Handle other slice/array types
+			if rv.Len() == 0 {
+				return "[]"
+			}
+			var parts []string
+			for i := 0; i < rv.Len(); i++ {
+				parts = append(parts, formatPythonStyle(rv.Index(i).Interface()))
+			}
+			return "[" + strings.Join(parts, ", ") + "]"
+		case reflect.Map:
+			// Handle other map types
+			if rv.Len() == 0 {
+				return "{}"
+			}
+			var parts []string
+			iter := rv.MapRange()
+			for iter.Next() {
+				key := formatPythonStyle(iter.Key().Interface())
+				value := formatPythonStyle(iter.Value().Interface())
+				parts = append(parts, fmt.Sprintf("%s: %s", key, value))
+			}
+			// Don't sort for consistent output - preserve order
+			return "{" + strings.Join(parts, ", ") + "}"
+		case reflect.Ptr:
+			// Handle pointers
+			if rv.IsNil() {
+				return "null"
+			}
+			return formatPythonStyle(rv.Elem().Interface())
+		default:
+			// For other types, use their default string representation
+			return fmt.Sprintf("%v", v)
+		}
+	}
 }

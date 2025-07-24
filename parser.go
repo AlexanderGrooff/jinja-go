@@ -70,9 +70,6 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 	parts := splitExpressionWithFilters(fullExprStr)
 	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" && len(parts) == 1 && fullExprStr != "" && strings.TrimSpace(fullExprStr) != "" {
 		// Handles "{{}}" or "{{   }}" resulting in empty base expression vs an explicitly empty key like "{{ '' | ... }}"
-		// If fullExprStr itself was non-empty but trimmed to empty for parts[0] with no filters, it might be "{{ }}".
-		// In Jinja, {{}} or {{ }} often means lookup of empty string key or results in empty string.
-		// Let's treat a completely empty or whitespace-only expression (after trimming node.content) as lookup for ""
 		if strings.TrimSpace(fullExprStr) == "" {
 			baseExprToLookup := ""
 			val, exists := context[baseExprToLookup]
@@ -81,8 +78,6 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 			}
 			return val, false, nil
 		}
-		// If parts[0] is empty but there are filters, e.g. "{{ | default('empty') }}" - this is likely a syntax error.
-		// Or if fullExprStr had content that split into an empty first part.
 		return nil, false, fmt.Errorf("empty base expression before filter pipeline: '%s'", fullExprStr)
 	}
 
@@ -104,14 +99,18 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 		currentValue = bVal
 	} else if strings.HasPrefix(baseExpr, "[") && strings.HasSuffix(baseExpr, "]") {
 		listContent := baseExpr[1 : len(baseExpr)-1]
-		// Each item in the list can be an expression itself, so we need to parse them.
-		// For now, we will parse them as literal or variable.
-		// A more complete solution would recursively call an expression evaluator.
 		items, err := parseListItems(listContent, context)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to parse list: %v", err)
 		}
 		currentValue = items
+	} else if strings.HasPrefix(strings.TrimSpace(baseExpr), "{") && strings.HasSuffix(strings.TrimSpace(baseExpr), "}") {
+		// Try to parse as dictionary literal using the LALR parser
+		dictValue, err := ParseAndEvaluate(strings.TrimSpace(baseExpr), context)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to parse dictionary literal: %v", err)
+		}
+		currentValue = dictValue
 	} else {
 		// Not a recognized literal. Assume it's a variable name.
 		if strings.Contains(baseExpr, ".") || strings.Contains(baseExpr, "[") {
@@ -165,26 +164,15 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 		}
 
 		var filterErr error
-		// The `currentValue` (which might be nil if initialLookupFailed) is passed to the filter.
-		// The filter (e.g., `defaultFilter`) is responsible for handling this based on its logic.
 		currentValue, filterErr = filterFunc(currentValue, evaluatedArgs...)
 		if filterErr != nil {
 			return nil, false, fmt.Errorf("error applying filter '%s': %v", filterName, filterErr)
 		}
 
-		// If a filter (like 'default') was applied to an initially undefined variable
-		// and produced a result, the value is no longer "effectively undefined" for the rest of the pipeline
-		// or for the final "strict undefined" check.
-		if initialLookupFailed { // Check if the *original* variable was the source of undefinedness
-			// If default filter (or similar) just ran, it might have resolved the undefined state.
-			// We mark it as no longer "effectively undefined" if currentValue is now non-nil,
-			// or if the filter is known to handle undefined (like 'default').
-			// A simpler check: if defaultFilter was called on an undefined var, it 'handles' it.
+		if initialLookupFailed {
 			if filterName == "default" {
 				currentValueIsEffectivelyUndefined = false
 			}
-			// A more general rule: if input was nil due to lookup failure, and filter returns non-nil, it's "resolved".
-			// However, `default` specifically makes it "not undefined" for strict checks.
 		}
 	}
 
@@ -360,7 +348,9 @@ func splitExpressionWithFilters(fullExprStr string) []string {
 	var currentPart strings.Builder
 	inSingleQuote := false
 	inDoubleQuote := false
-	parenLevel := 0 // To ignore pipes within parentheses, e.g. a_func(b | c)
+	parenLevel := 0   // To ignore pipes within parentheses, e.g. a_func(b | c)
+	bracketLevel := 0 // To ignore pipes within list literals
+	braceLevel := 0   // To ignore pipes within dict literals
 
 	for i, r := range fullExprStr {
 		switch r {
@@ -374,20 +364,44 @@ func splitExpressionWithFilters(fullExprStr string) []string {
 				inDoubleQuote = !inDoubleQuote
 			}
 			currentPart.WriteRune(r)
-		case '(':
+		case '(': // Parentheses
 			if !inSingleQuote && !inDoubleQuote {
 				parenLevel++
 			}
 			currentPart.WriteRune(r)
 		case ')':
 			if !inSingleQuote && !inDoubleQuote {
-				if parenLevel > 0 { // Ensure we don't go negative if unbalanced
+				if parenLevel > 0 {
 					parenLevel--
 				}
 			}
 			currentPart.WriteRune(r)
+		case '[':
+			if !inSingleQuote && !inDoubleQuote {
+				bracketLevel++
+			}
+			currentPart.WriteRune(r)
+		case ']':
+			if !inSingleQuote && !inDoubleQuote {
+				if bracketLevel > 0 {
+					bracketLevel--
+				}
+			}
+			currentPart.WriteRune(r)
+		case '{':
+			if !inSingleQuote && !inDoubleQuote {
+				braceLevel++
+			}
+			currentPart.WriteRune(r)
+		case '}':
+			if !inSingleQuote && !inDoubleQuote {
+				if braceLevel > 0 {
+					braceLevel--
+				}
+			}
+			currentPart.WriteRune(r)
 		case '|':
-			if !inSingleQuote && !inDoubleQuote && parenLevel == 0 {
+			if !inSingleQuote && !inDoubleQuote && parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
 				parts = append(parts, strings.TrimSpace(currentPart.String()))
 				currentPart.Reset()
 			} else {
@@ -760,6 +774,10 @@ func (p *Parser) parseExpressionTag() *Node {
 
 	var expressionContentEnd int = -1
 
+	parenLevel := 0
+	bracketLevel := 0
+	braceLevel := 0
+
 	for searchIndex < len(p.input) {
 		// String literal skipping logic
 		if p.input[searchIndex] == '\'' || p.input[searchIndex] == '"' {
@@ -799,6 +817,28 @@ func (p *Parser) parseExpressionTag() *Node {
 			continue // Continue main scan for '{{' or '}}'
 		}
 
+		// Track grouping levels
+		switch p.input[searchIndex] {
+		case '(':
+			parenLevel++
+		case ')':
+			if parenLevel > 0 {
+				parenLevel--
+			}
+		case '[':
+			bracketLevel++
+		case ']':
+			if bracketLevel > 0 {
+				bracketLevel--
+			}
+		case '{':
+			braceLevel++
+		case '}':
+			if braceLevel > 0 {
+				braceLevel--
+			}
+		}
+
 		// Check for nested {{ and }}
 		if searchIndex+1 < len(p.input) {
 			if p.input[searchIndex] == '{' && p.input[searchIndex+1] == '{' {
@@ -806,11 +846,11 @@ func (p *Parser) parseExpressionTag() *Node {
 				searchIndex += 2
 				continue
 			} else if p.input[searchIndex] == '}' && p.input[searchIndex+1] == '}' {
-				level--
-				if level == 0 {
+				if level == 1 && parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
 					expressionContentEnd = searchIndex // Marks start of "}}"
 					break                              // Found matching }}
 				}
+				level--
 				searchIndex += 2
 				continue
 			}
@@ -829,7 +869,6 @@ func (p *Parser) parseExpressionTag() *Node {
 	content := p.input[expressionContentStart:expressionContentEnd]
 	p.pos = expressionContentEnd + 2 // Advance parser position past "}}"
 
-	// Assuming Node and NodeExpression (a NodeType constant) are defined
 	return &Node{
 		Type:    NodeExpression,
 		Content: content,

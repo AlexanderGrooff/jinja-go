@@ -244,22 +244,49 @@ func TestTemplateString(t *testing.T) {
 			want:     "Hello {# unclosed comment", // Unclosed comment is treated as text by parser
 		},
 		{
-			name:     "template with list of strings",
-			template: "{{ ['abc'] }}",
+			name:     "template with list of integers",
+			template: "{{ [1, 2, 3] }}",
 			context:  map[string]interface{}{},
-			want:     "abc",
+			want:     "[1, 2, 3]",
 		},
 		{
-			name:     "template with list of strings and variables",
-			template: "{{ ['a', 'b', expr] }}",
-			context:  map[string]interface{}{"expr": "C"},
-			want:     "abC",
+			name:     "template with list of booleans",
+			template: "{{ [true, false, true] }}",
+			context:  map[string]interface{}{},
+			want:     "[true, false, true]",
 		},
 		{
-			name:     "template with list and extra whitespaces",
-			template: "{{ [ 'a',  'b' ,  'c'  ] }}",
+			name:     "template with mixed list",
+			template: "{{ [1, 'abc', true, expr] }}",
+			context:  map[string]interface{}{"expr": false},
+			want:     "[1, \"abc\", true, false]",
+		},
+		{
+			name:     "template with nested list",
+			template: "{{ [[1, 2], [3, 4]] }}",
 			context:  map[string]interface{}{},
-			want:     "abc",
+			want:     "[[1, 2], [3, 4]]",
+		},
+		{
+			name:     "template with dictionary",
+			template: "{{ {'a': 1, 'b': true, 'c': 'str'} }}",
+			context:  map[string]interface{}{},
+			want:     "{\"a\": 1, \"b\": true, \"c\": \"str\"}",
+		},
+		{
+			name:     "template with dictionary and variables",
+			template: "{{ {'key': value, 'flag': bool_val} }}",
+			context:  map[string]interface{}{"value": 42, "bool_val": true},
+			want:     "{\"key\": 42, \"flag\": true}",
+		},
+		{
+			name:     "template with list and dict variables",
+			template: "{{ list_var }} {{ dict_var }}",
+			context: map[string]interface{}{
+				"list_var": []interface{}{1, true, "abc"},
+				"dict_var": map[string]interface{}{"x": 10, "y": false},
+			},
+			want: "[1, true, \"abc\"] {\"x\": 10, \"y\": false}",
 		},
 	}
 
@@ -524,6 +551,13 @@ func TestEvaluateExpression(t *testing.T) {
 			expression: "[[1, 2], [3, 4]]",
 			context:    map[string]interface{}{},
 			want:       []interface{}{[]interface{}{1, 2}, []interface{}{3, 4}},
+			wantErr:    false,
+		},
+		{
+			name:       "list variable",
+			expression: "list_var",
+			context:    map[string]interface{}{"list_var": []interface{}{1, 2, 3}},
+			want:       []interface{}{1, 2, 3},
 			wantErr:    false,
 		},
 	}
