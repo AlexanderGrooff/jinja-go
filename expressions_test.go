@@ -558,6 +558,43 @@ func TestParseAndEvaluate(t *testing.T) {
 			context: map[string]interface{}{},
 			want:    "a a",
 		},
+		// Add string find tests to ParseAndEvaluate test cases
+		{
+			name:    "string find basic",
+			expr:    "'hello world'.find('world')",
+			context: map[string]interface{}{},
+			want:    6,
+		},
+		{
+			name:    "string find basic with variable",
+			expr:    "var.find('world')",
+			context: map[string]interface{}{"var": "hello world"},
+			want:    6,
+		},
+		{
+			name:    "string find not found",
+			expr:    "'hello world'.find('xyz')",
+			context: map[string]interface{}{},
+			want:    -1,
+		},
+		{
+			name:    "string find with start",
+			expr:    "'hello world'.find('o', 5)",
+			context: map[string]interface{}{},
+			want:    7,
+		},
+		{
+			name:    "string find with start and end",
+			expr:    "'hello world'.find('o', 5, 8)",
+			context: map[string]interface{}{},
+			want:    7,
+		},
+		{
+			name:    "string find empty string",
+			expr:    "'hello world'.find('')",
+			context: map[string]interface{}{},
+			want:    0,
+		},
 		// Jinja 'is defined' and 'is not defined' tests
 		{
 			name:    "is defined with defined variable",

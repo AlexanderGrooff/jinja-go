@@ -124,8 +124,9 @@ func registerStringMethods() {
 	// Create methods map for string type
 	stringMethods := make(map[string]FunctionFunc)
 
-	// Register the format method
+	// Register all string methods
 	stringMethods["format"] = stringFormatMethod
+	stringMethods["find"] = stringFindMethod
 
 	// Add string methods to global methods
 	GlobalMethods["string"] = stringMethods
@@ -290,4 +291,98 @@ func stringFormatMethod(e *Evaluator, args ...interface{}) (interface{}, error) 
 	})
 
 	return result, nil
+}
+
+// stringFindMethod implements the string find method (Python str.find behavior):
+// Usage: {{ "hello world".find("world") }} -> 6
+// Usage: {{ "hello world".find("xyz") }} -> -1
+// Usage: {{ "hello world".find("o", 5) }} -> 7 (start from index 5)
+// Usage: {{ "hello world".find("o", 5, 8) }} -> 7 (start from index 5, end before index 8)
+func stringFindMethod(e *Evaluator, args ...interface{}) (interface{}, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("find method requires a string and a substring")
+	}
+
+	// First argument is the string itself
+	mainStr, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("find method requires a string, got %T", args[0])
+	}
+
+	// Second argument is the substring to find
+	subStr, ok := args[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("find method requires a string substring, got %T", args[1])
+	}
+
+	// Handle start and end parameters
+	start := 0
+	end := len(mainStr)
+
+	// Parse start parameter (third argument)
+	if len(args) > 2 {
+		switch v := args[2].(type) {
+		case int:
+			start = v
+		case float64:
+			start = int(v)
+		default:
+			return nil, fmt.Errorf("find method start parameter must be a number, got %T", args[2])
+		}
+	}
+
+	// Parse end parameter (fourth argument)
+	if len(args) > 3 {
+		switch v := args[3].(type) {
+		case int:
+			end = v
+		case float64:
+			end = int(v)
+		default:
+			return nil, fmt.Errorf("find method end parameter must be a number, got %T", args[3])
+		}
+	}
+
+	// Handle negative indices (Python behavior)
+	if start < 0 {
+		start = len(mainStr) + start
+		if start < 0 {
+			start = 0
+		}
+	}
+	if end < 0 {
+		end = len(mainStr) + end
+		if end < 0 {
+			end = 0
+		}
+	}
+
+	// Ensure start and end are within bounds
+	if start > len(mainStr) {
+		start = len(mainStr)
+	}
+	if end > len(mainStr) {
+		end = len(mainStr)
+	}
+	if start > end {
+		start = end
+	}
+
+	// Extract the slice to search in
+	searchStr := mainStr[start:end]
+
+	// Find the substring
+	index := -1
+	for i := 0; i <= len(searchStr)-len(subStr); i++ {
+		if searchStr[i:i+len(subStr)] == subStr {
+			index = i
+			break // Return the first occurrence (lowest index)
+		}
+	}
+
+	// Return the index relative to the original string, or -1 if not found
+	if index == -1 {
+		return -1, nil
+	}
+	return start + index, nil
 }

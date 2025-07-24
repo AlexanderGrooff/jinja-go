@@ -2220,6 +2220,135 @@ func TestStringFormatMethod(t *testing.T) {
 	}
 }
 
+func TestStringFindMethod(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "basic find - substring found",
+			template: "{{ 'hello world'.find('world') }}",
+			context:  map[string]interface{}{},
+			want:     "6",
+			wantErr:  false,
+		},
+		{
+			name:     "basic find - substring not found",
+			template: "{{ 'hello world'.find('xyz') }}",
+			context:  map[string]interface{}{},
+			want:     "-1",
+			wantErr:  false,
+		},
+		{
+			name:     "find with start parameter",
+			template: "{{ 'hello world'.find('o', 5) }}",
+			context:  map[string]interface{}{},
+			want:     "7",
+			wantErr:  false,
+		},
+		{
+			name:     "find with start and end parameters",
+			template: "{{ 'hello world'.find('o', 5, 8) }}",
+			context:  map[string]interface{}{},
+			want:     "7",
+			wantErr:  false,
+		},
+		{
+			name:     "find with negative start index",
+			template: "{{ 'hello world'.find('o', -3) }}",
+			context:  map[string]interface{}{},
+			want:     "-1",
+			wantErr:  false,
+		},
+		{
+			name:     "find with negative end index",
+			template: "{{ 'hello world'.find('o', 0, -3) }}",
+			context:  map[string]interface{}{},
+			want:     "4",
+			wantErr:  false,
+		},
+		{
+			name:     "find empty string",
+			template: "{{ 'hello world'.find('') }}",
+			context:  map[string]interface{}{},
+			want:     "0",
+			wantErr:  false,
+		},
+		{
+			name:     "find with start beyond string length",
+			template: "{{ 'hello'.find('o', 10) }}",
+			context:  map[string]interface{}{},
+			want:     "-1",
+			wantErr:  false,
+		},
+		{
+			name:     "find with end beyond string length",
+			template: "{{ 'hello world'.find('world', 0, 20) }}",
+			context:  map[string]interface{}{},
+			want:     "6",
+			wantErr:  false,
+		},
+		{
+			name:     "find with start > end",
+			template: "{{ 'hello world'.find('o', 8, 5) }}",
+			context:  map[string]interface{}{},
+			want:     "-1",
+			wantErr:  false,
+		},
+		{
+			name:     "find first occurrence of multiple matches",
+			template: "{{ 'hello world'.find('l') }}",
+			context:  map[string]interface{}{},
+			want:     "2",
+			wantErr:  false,
+		},
+		{
+			name:     "find with float start parameter",
+			template: "{{ 'hello world'.find('o', 5.0) }}",
+			context:  map[string]interface{}{},
+			want:     "7",
+			wantErr:  false,
+		},
+		{
+			name:     "find with float end parameter",
+			template: "{{ 'hello world'.find('o', 0, 8.0) }}",
+			context:  map[string]interface{}{},
+			want:     "4",
+			wantErr:  false,
+		},
+		{
+			name:     "find in variable string",
+			template: "{{ my_string.find('test') }}",
+			context:  map[string]interface{}{"my_string": "this is a test string"},
+			want:     "10",
+			wantErr:  false,
+		},
+		{
+			name:     "find with variable parameters",
+			template: "{{ 'hello world'.find('o', start_pos, end_pos) }}",
+			context:  map[string]interface{}{"start_pos": 5, "end_pos": 8},
+			want:     "7",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := TemplateString(tt.template, tt.context)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TemplateString() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("TemplateString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseVariables(t *testing.T) {
 	tests := []struct {
 		name     string

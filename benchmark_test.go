@@ -967,3 +967,65 @@ func BenchmarkLookupFilter(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkStringFindMethod(b *testing.B) {
+	testCases := []struct {
+		name     string
+		template string
+		context  map[string]interface{}
+	}{
+		{
+			name:     "basic_find",
+			template: "{{ 'hello world'.find('world') }}",
+			context:  map[string]interface{}{},
+		},
+		{
+			name:     "find_not_found",
+			template: "{{ 'hello world'.find('xyz') }}",
+			context:  map[string]interface{}{},
+		},
+		{
+			name:     "find_with_start",
+			template: "{{ 'hello world'.find('o', 5) }}",
+			context:  map[string]interface{}{},
+		},
+		{
+			name:     "find_with_start_end",
+			template: "{{ 'hello world'.find('o', 5, 8) }}",
+			context:  map[string]interface{}{},
+		},
+		{
+			name:     "find_empty_string",
+			template: "{{ 'hello world'.find('') }}",
+			context:  map[string]interface{}{},
+		},
+		{
+			name:     "find_in_long_string",
+			template: "{{ long_string.find('target') }}",
+			context: map[string]interface{}{
+				"long_string": "This is a very long string that contains the target word multiple times. The target word appears here and also here. We want to find the first occurrence of target in this long string.",
+			},
+		},
+		{
+			name:     "find_with_variables",
+			template: "{{ my_string.find(search_term, start_pos) }}",
+			context: map[string]interface{}{
+				"my_string":   "hello world test string",
+				"search_term": "test",
+				"start_pos":   5,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, err := TemplateString(tc.template, tc.context)
+				if err != nil {
+					b.Fatalf("Error in TemplateString: %v", err)
+				}
+			}
+		})
+	}
+}

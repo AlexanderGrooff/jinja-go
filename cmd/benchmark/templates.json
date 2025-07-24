@@ -141,5 +141,19 @@
     "context": {
       "my_var": 123
     }
+  },
+  {
+    "name": "string_find_method",
+    "template": "{{ text.find('target') }}",
+    "context": {
+      "text": "This is a test string that contains the target word multiple times. The target word appears here and also here."
+    }
+  },
+  {
+    "name": "string_find_with_params",
+    "template": "{{ text.find('o', 5, 15) }}",
+    "context": {
+      "text": "hello world test string"
+    }
   }
 ] 

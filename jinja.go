@@ -111,6 +111,28 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 				}
 			}
 
+			// Check if this is a method call (contains .method( or .method )
+			if strings.Contains(trimmedExpr, ".") && (strings.Contains(trimmedExpr, "(") || strings.Contains(trimmedExpr, " ")) {
+				// Try to handle method calls with ParseAndEvaluate
+				val, err := ParseAndEvaluate(trimmedExpr, context)
+				if err == nil {
+					// Success! Convert the result to string and add to output
+					switch v := val.(type) {
+					case string:
+						result.WriteString(v)
+					case nil:
+						// nil values render as empty strings
+						// Do nothing, no output
+					default:
+						// Use the generic Python-style formatter for all types
+						result.WriteString(formatPythonStyle(v))
+					}
+					currentIndex++
+					continue
+				}
+				// If ParseAndEvaluate fails, fall back to the filter pipeline
+			}
+
 			// For normal expressions, use the filter pipeline
 			val, wasUndefined, err := evaluateFullExpressionInternal(node.Content, context)
 			if err != nil {
