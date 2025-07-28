@@ -399,7 +399,6 @@ func TestParseAndEvaluate(t *testing.T) {
 			context: map[string]interface{}{},
 			want:    map[string]interface{}{"a": 1, "b": "two", "c": true},
 		},
-
 		// Attribute access
 		{
 			name:    "attribute access from map",
@@ -643,6 +642,60 @@ func TestParseAndEvaluate(t *testing.T) {
 			expr:    "foo.bar is not defined",
 			context: map[string]interface{}{"foo": map[string]interface{}{}},
 			want:    true,
+		},
+		{
+			name:    "list of dictionaries with lists",
+			expr:    "[{'a': [1, 2]}, {'b': [3, 4]}]",
+			context: map[string]interface{}{},
+			want: []interface{}{
+				map[string]interface{}{"a": []interface{}{1, 2}},
+				map[string]interface{}{"b": []interface{}{3, 4}},
+			},
+		},
+		{
+			name:    "dictionary with list of dictionaries",
+			expr:    "{'key': [{'a': 1}, {'b': 2}]}",
+			context: map[string]interface{}{},
+			want: map[string]interface{}{
+				"key": []interface{}{
+					map[string]interface{}{"a": 1},
+					map[string]interface{}{"b": 2},
+				},
+			},
+		},
+		{
+			name:    "string literal with escaped quotes and backslashes",
+			expr:    "'a \\'b\\' c\\\\d'",
+			context: map[string]interface{}{},
+			want:    "a 'b' c\\d",
+		},
+		{
+			name:    "mixed grouping symbols",
+			expr:    "([{'a': 1}])",
+			context: map[string]interface{}{},
+			want: []interface{}{
+				map[string]interface{}{"a": 1},
+			},
+		},
+		{
+			name:      "unclosed list",
+			expr:      "[1, 2, 3",
+			wantError: true,
+		},
+		{
+			name:      "unclosed dict",
+			expr:      "{'a': 1",
+			wantError: true,
+		},
+		{
+			name:      "mismatched parenthesis",
+			expr:      "(1 + 2]",
+			wantError: true,
+		},
+		{
+			name:      "missing dict value",
+			expr:      "{'a':}",
+			wantError: true,
 		},
 	}
 
