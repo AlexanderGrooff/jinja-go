@@ -73,59 +73,13 @@ func TemplateString(template string, context map[string]interface{}) (string, er
 }
 
 func processExpression(node *Node, context map[string]any, result *strings.Builder) error {
-	trimmedExpr := strings.TrimSpace(node.Content)
-
-	// First try to handle special functions that require different evaluation
-	if strings.HasPrefix(trimmedExpr, "lookup(") || strings.Contains(trimmedExpr, " lookup(") {
-		// Handle lookup function specially
-		val, err := ParseAndEvaluate(trimmedExpr, context)
-		if err == nil {
-			// Success! Convert the result to string and add to output
-			switch v := val.(type) {
-			case string:
-				result.WriteString(v)
-			case nil:
-				// nil values render as empty strings
-				// Do nothing, no output
-			default:
-				// Use the generic Python-style formatter for all types
-				result.WriteString(formatPythonStyle(v))
-			}
-			return nil
-		} else {
-			// For lookup errors, return a more specific error
-			return fmt.Errorf("error in lookup function: %v", err)
-		}
-	}
-
-	// Check if this is a method call (contains .method( or .method )
-	if strings.Contains(trimmedExpr, ".") && (strings.Contains(trimmedExpr, "(") || strings.Contains(trimmedExpr, " ")) {
-		// Try to handle method calls with ParseAndEvaluate
-		val, err := ParseAndEvaluate(trimmedExpr, context)
-		if err == nil {
-			// Success! Convert the result to string and add to output
-			switch v := val.(type) {
-			case string:
-				result.WriteString(v)
-			case nil:
-				// nil values render as empty strings
-				// Do nothing, no output
-			default:
-				// Use the generic Python-style formatter for all types
-				result.WriteString(formatPythonStyle(v))
-			}
-			return nil
-		}
-		// If ParseAndEvaluate fails, fall back to the filter pipeline
-	}
-
-	// For normal expressions, use the filter pipeline
+	// With the new LALR-based `evaluateFullExpressionInternal`, we can process all expressions uniformly.
 	val, wasUndefined, err := evaluateFullExpressionInternal(node.Content, context)
 	if err != nil {
 		return fmt.Errorf("error evaluating expression '{{ %s }}': %v", node.Content, err)
 	}
 
-	if wasUndefined && val == nil {
+	if wasUndefined {
 		// Jinja2 renders undefined variables as empty strings
 		return nil
 	}
@@ -210,29 +164,10 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 // If the variable is undefined after evaluation (and not handled by a filter like default),
 // an error is returned.
 func EvaluateExpression(expression string, context map[string]interface{}) (interface{}, error) {
-	// Trim leading/trailing spaces from the raw expression string as the parser/evaluator expects clean content.
 	trimmedExpression := strings.TrimSpace(expression)
 
-	// If the expression contains a filter pipe, prioritize the original filter pipeline
-	if strings.Contains(trimmedExpression, "|") {
-		val, wasStrictlyUndefined, err := evaluateFullExpressionInternal(trimmedExpression, context)
-		if err == nil {
-			if wasStrictlyUndefined {
-				return nil, fmt.Errorf("variable '%s' is undefined", expression)
-			}
-			return val, nil
-		}
-	}
-
-	// Try with the LALR parser for all expressions
-	// This handles dot notation, operators, complex expressions, etc.
-	val, err := ParseAndEvaluate(trimmedExpression, context)
-	if err == nil {
-		return val, nil
-	}
-
-	// Fall back to the old evaluator for expressions that the LALR parser couldn't handle
-	val, wasStrictlyUndefined, err := evaluateFullExpressionInternal(trimmedExpression, context) // from parser.go
+	// `evaluateFullExpressionInternal` now uses the LALR parser, so we can just call it.
+	val, wasStrictlyUndefined, err := evaluateFullExpressionInternal(trimmedExpression, context)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate expression '%s': %v", expression, err)
 	}
@@ -240,7 +175,7 @@ func EvaluateExpression(expression string, context map[string]interface{}) (inte
 	if wasStrictlyUndefined {
 		// For EvaluateExpression, strictly undefined (and not resolved by a filter like default)
 		// should be an error, as per the project requirements.
-		return nil, fmt.Errorf("variable '%s' is undefined", expression) // Or more specific part that was undefined
+		return nil, fmt.Errorf("variable in expression '%s' is undefined", expression)
 	}
 
 	return val, nil

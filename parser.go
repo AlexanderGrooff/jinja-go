@@ -66,116 +66,30 @@ const (
 // It returns the final value, a boolean indicating if the base variable was strictly undefined
 // (and not resolved by a filter like default), and an error if parsing/evaluation failed.
 func evaluateFullExpressionInternal(fullExprStr string, context map[string]interface{}) (value interface{}, wasStrictlyUndefined bool, err error) {
-	parts := splitExpressionWithFilters(fullExprStr)
-	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" && len(parts) == 1 && fullExprStr != "" && strings.TrimSpace(fullExprStr) != "" {
-		// Handles "{{}}" or "{{   }}" resulting in empty base expression vs an explicitly empty key like "{{ '' | ... }}"
-		if strings.TrimSpace(fullExprStr) == "" {
-			baseExprToLookup := ""
-			val, exists := context[baseExprToLookup]
-			if !exists {
-				return nil, true, nil // Undefined, no error for TemplateString to make empty
-			}
-			return val, false, nil
+	trimmedExpr := strings.TrimSpace(fullExprStr)
+	if trimmedExpr == "" {
+		// Handles `{{}}` or `{{   }}`. Jinja2 renders this as an empty string.
+		// This is treated as an undefined variable named "".
+		val, exists := context[""]
+		if !exists {
+			return nil, true, nil
 		}
-		return nil, false, fmt.Errorf("empty base expression before filter pipeline: '%s'", fullExprStr)
+		return val, false, nil
 	}
 
-	baseExpr := strings.TrimSpace(parts[0])
-	var currentValue interface{}
-	initialLookupFailed := false
-
-	// 1. Evaluate the base expression (literal or variable)
-	if (strings.HasPrefix(baseExpr, "'") && strings.HasSuffix(baseExpr, "'")) ||
-		(strings.HasPrefix(baseExpr, "\"") && strings.HasSuffix(baseExpr, "\"")) {
-		if len(baseExpr) >= 2 {
-			currentValue = unescapeString(baseExpr[1 : len(baseExpr)-1])
-		} else {
-			currentValue = "" // Should not happen if prefix/suffix match
-		}
-	} else if i, errConv := strconv.Atoi(baseExpr); errConv == nil {
-		currentValue = i
-	} else if bVal, errConv := strconv.ParseBool(baseExpr); errConv == nil {
-		currentValue = bVal
-	} else if strings.HasPrefix(baseExpr, "[") && strings.HasSuffix(baseExpr, "]") {
-		listContent := baseExpr[1 : len(baseExpr)-1]
-		items, err := parseListItems(listContent, context)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to parse list: %v", err)
-		}
-		currentValue = items
-	} else if strings.HasPrefix(strings.TrimSpace(baseExpr), "{") && strings.HasSuffix(strings.TrimSpace(baseExpr), "}") {
-		// Try to parse as dictionary literal using the LALR parser
-		dictValue, err := ParseAndEvaluate(strings.TrimSpace(baseExpr), context)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to parse dictionary literal: %v", err)
-		}
-		currentValue = dictValue
-	} else {
-		// Not a recognized literal. Assume it's a variable name.
-		if strings.Contains(baseExpr, ".") || strings.Contains(baseExpr, "[") {
-			val, err := evaluateComplexVariable(baseExpr, context)
-			if err != nil {
-				initialLookupFailed = true
-				currentValue = nil
-			} else {
-				currentValue = val
-			}
-		} else {
-			// Regular variable lookup
-			if !isValidJinjaIdentifier(baseExpr) {
-				return nil, false, fmt.Errorf("invalid syntax for expression or variable name: '%s'", baseExpr)
-			}
-			val, exists := context[baseExpr]
-			if !exists {
-				initialLookupFailed = true
-				currentValue = nil // Represents undefined for now
-			} else {
-				currentValue = val
-			}
-		}
+	// Use the LALR parser for all expression evaluation.
+	val, err := ParseAndEvaluate(trimmedExpr, context)
+	if err != nil {
+		// A parsing or evaluation error occurred.
+		return nil, false, err
 	}
 
-	currentValueIsEffectivelyUndefined := initialLookupFailed
-
-	// 2. Apply filters
-	for i := 1; i < len(parts); i++ {
-		filterCallStr := strings.TrimSpace(parts[i])
-		if filterCallStr == "" {
-			return nil, false, fmt.Errorf("empty filter declaration in pipeline: '%s'", fullExprStr)
-		}
-		filterName, filterArgsRaw, errParseFilter := parseFilterCall(filterCallStr)
-		if errParseFilter != nil {
-			return nil, false, fmt.Errorf("failed to parse filter call '%s': %v", filterCallStr, errParseFilter)
-		}
-
-		filterFunc, ok := GlobalFilters[filterName]
-		if !ok {
-			return nil, false, fmt.Errorf("unknown filter '%s'", filterName)
-		}
-
-		var evaluatedArgs []interface{}
-		for _, argStr := range filterArgsRaw {
-			evalArg, errEvalArg := evaluateLiteralOrVariable(argStr, context)
-			if errEvalArg != nil {
-				return nil, false, fmt.Errorf("failed to evaluate filter argument '%s' for filter '%s': %v", argStr, filterName, errEvalArg)
-			}
-			evaluatedArgs = append(evaluatedArgs, evalArg)
-		}
-
-		var filterErr error
-		currentValue, filterErr = filterFunc(currentValue, evaluatedArgs...)
-		if filterErr != nil {
-			return nil, false, fmt.Errorf("error applying filter '%s': %v", filterName, filterErr)
-		}
-
-		if initialLookupFailed {
-			if filterName == "default" {
-				currentValueIsEffectivelyUndefined = false
-			}
-		}
+	// Check if the result is an unhandled undefined value.
+	if _, ok := val.(UndefinedType); ok {
+		return nil, true, nil
 	}
 
-	return currentValue, initialLookupFailed && currentValueIsEffectivelyUndefined, nil
+	return val, false, nil
 }
 
 // evaluateComplexVariable handles dot notation (e.g., user.name) and subscript access (e.g., items[0])

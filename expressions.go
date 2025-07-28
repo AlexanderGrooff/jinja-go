@@ -985,6 +985,9 @@ func (e *Evaluator) evalAttribute(node *ExprNode) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, ok := obj.(UndefinedType); ok {
+		return Undefined, nil // Propagate undefined
+	}
 	return getAttributeValue(obj, node.Identifier)
 }
 
@@ -996,6 +999,9 @@ func (e *Evaluator) evalSubscript(node *ExprNode) (interface{}, error) {
 	obj, err := e.Evaluate(node.Children[0])
 	if err != nil {
 		return nil, err
+	}
+	if _, ok := obj.(UndefinedType); ok {
+		return Undefined, nil // Propagate undefined
 	}
 	key, err := e.Evaluate(node.Children[1])
 	if err != nil {

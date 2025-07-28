@@ -30,6 +30,11 @@ func defaultFilter(input interface{}, args ...interface{}) (interface{}, error) 
 	// This is not implemented yet. We are implementing the common one-argument behavior.
 	defaultValue := args[0]
 
+	// The default filter should trigger if the value is undefined.
+	if _, ok := input.(UndefinedType); ok {
+		return defaultValue, nil
+	}
+
 	if input == nil {
 		return defaultValue, nil
 	}
