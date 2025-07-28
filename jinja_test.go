@@ -277,7 +277,7 @@ func TestTemplateString(t *testing.T) {
 			name:     "template with dictionary and variables",
 			template: "{{ {'key': value, 'flag': bool_val} }}",
 			context:  map[string]interface{}{"value": 42, "bool_val": true},
-			want:     "{\"key\": 42, \"flag\": true}",
+			want:     "{\"flag\": true, \"key\": 42}",
 		},
 		{
 			name:     "template with list and dict variables",

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -473,11 +474,18 @@ func formatPythonStyle(val interface{}) string {
 		}
 		var parts []string
 
+		keys := make([]string, 0, len(v))
 		for key := range v {
-			value := v[key]
-			parts = append(parts, fmt.Sprintf("%q: %s", key, formatPythonStyle(value)))
+			keys = append(keys, key)
 		}
+		sort.Strings(keys)
+		parts = make([]string, 0, len(v))
+		for _, key := range keys {
+			parts = append(parts, fmt.Sprintf("%q: %s", key, formatPythonStyle(v[key])))
+		}
+
 		return "{" + strings.Join(parts, ", ") + "}"
+
 	default:
 		// Use reflection for other types
 		rv := reflect.ValueOf(val)
