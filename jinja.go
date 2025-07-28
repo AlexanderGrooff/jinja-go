@@ -72,6 +72,77 @@ func TemplateString(template string, context map[string]interface{}) (string, er
 	return sb.String(), nil
 }
 
+func processExpression(node *Node, context map[string]any, result *strings.Builder) error {
+	trimmedExpr := strings.TrimSpace(node.Content)
+
+	// First try to handle special functions that require different evaluation
+	if strings.HasPrefix(trimmedExpr, "lookup(") || strings.Contains(trimmedExpr, " lookup(") {
+		// Handle lookup function specially
+		val, err := ParseAndEvaluate(trimmedExpr, context)
+		if err == nil {
+			// Success! Convert the result to string and add to output
+			switch v := val.(type) {
+			case string:
+				result.WriteString(v)
+			case nil:
+				// nil values render as empty strings
+				// Do nothing, no output
+			default:
+				// Use the generic Python-style formatter for all types
+				result.WriteString(formatPythonStyle(v))
+			}
+			return nil
+		} else {
+			// For lookup errors, return a more specific error
+			return fmt.Errorf("error in lookup function: %v", err)
+		}
+	}
+
+	// Check if this is a method call (contains .method( or .method )
+	if strings.Contains(trimmedExpr, ".") && (strings.Contains(trimmedExpr, "(") || strings.Contains(trimmedExpr, " ")) {
+		// Try to handle method calls with ParseAndEvaluate
+		val, err := ParseAndEvaluate(trimmedExpr, context)
+		if err == nil {
+			// Success! Convert the result to string and add to output
+			switch v := val.(type) {
+			case string:
+				result.WriteString(v)
+			case nil:
+				// nil values render as empty strings
+				// Do nothing, no output
+			default:
+				// Use the generic Python-style formatter for all types
+				result.WriteString(formatPythonStyle(v))
+			}
+			return nil
+		}
+		// If ParseAndEvaluate fails, fall back to the filter pipeline
+	}
+
+	// For normal expressions, use the filter pipeline
+	val, wasUndefined, err := evaluateFullExpressionInternal(node.Content, context)
+	if err != nil {
+		return fmt.Errorf("error evaluating expression '{{ %s }}': %v", node.Content, err)
+	}
+
+	if wasUndefined && val == nil {
+		// Jinja2 renders undefined variables as empty strings
+		return nil
+	}
+
+	switch v := val.(type) {
+	case string:
+		result.WriteString(v)
+	case nil:
+		// nil values render as empty strings
+		// Do nothing, no output
+	default:
+		// Use the generic Python-style formatter for all types
+		result.WriteString(formatPythonStyle(v))
+	}
+	return nil
+}
+
 // processNodes recursively processes a slice of nodes, handling control flow like {% if %}.
 func processNodes(nodes []*Node, context map[string]interface{}) (string, error) {
 	var result strings.Builder
@@ -85,78 +156,10 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 			result.WriteString(node.Content)
 			currentIndex++
 		case NodeExpression:
-			trimmedExpr := strings.TrimSpace(node.Content)
-
-			// First try to handle special functions that require different evaluation
-			if strings.HasPrefix(trimmedExpr, "lookup(") || strings.Contains(trimmedExpr, " lookup(") {
-				// Handle lookup function specially
-				val, err := ParseAndEvaluate(trimmedExpr, context)
-				if err == nil {
-					// Success! Convert the result to string and add to output
-					switch v := val.(type) {
-					case string:
-						result.WriteString(v)
-					case nil:
-						// nil values render as empty strings
-						// Do nothing, no output
-					default:
-						// Use the generic Python-style formatter for all types
-						result.WriteString(formatPythonStyle(v))
-					}
-					currentIndex++
-					continue
-				} else {
-					// For lookup errors, return a more specific error
-					return "", fmt.Errorf("error in lookup function: %v", err)
-				}
-			}
-
-			// Check if this is a method call (contains .method( or .method )
-			if strings.Contains(trimmedExpr, ".") && (strings.Contains(trimmedExpr, "(") || strings.Contains(trimmedExpr, " ")) {
-				// Try to handle method calls with ParseAndEvaluate
-				val, err := ParseAndEvaluate(trimmedExpr, context)
-				if err == nil {
-					// Success! Convert the result to string and add to output
-					switch v := val.(type) {
-					case string:
-						result.WriteString(v)
-					case nil:
-						// nil values render as empty strings
-						// Do nothing, no output
-					default:
-						// Use the generic Python-style formatter for all types
-						result.WriteString(formatPythonStyle(v))
-					}
-					currentIndex++
-					continue
-				}
-				// If ParseAndEvaluate fails, fall back to the filter pipeline
-			}
-
-			// For normal expressions, use the filter pipeline
-			val, wasUndefined, err := evaluateFullExpressionInternal(node.Content, context)
-			if err != nil {
-				return "", fmt.Errorf("error evaluating expression '{{ %s }}': %v", node.Content, err)
-			}
-
-			if wasUndefined && val == nil {
-				// Jinja2 renders undefined variables as empty strings
-				currentIndex++
-				continue
-			}
-
-			switch v := val.(type) {
-			case string:
-				result.WriteString(v)
-			case nil:
-				// nil values render as empty strings
-				// Do nothing, no output
-			default:
-				// Use the generic Python-style formatter for all types
-				result.WriteString(formatPythonStyle(v))
+			if err := processExpression(node, context, &result); err != nil {
+				return "", err
 			}
 			currentIndex++
-
 		case NodeComment:
 			// Comments are ignored
 			currentIndex++

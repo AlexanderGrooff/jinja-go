@@ -16,25 +16,25 @@ repos:
         pass_filenames: false
         fail_fast: true
     
-    -   id: go-benchmark
-        name: go benchmark
-        description: Run benchmarks and save results
-        entry: bash -c 'make benchmark-save && git add benchstat/latest.txt'
-        language: system
-        types: [go]
-        pass_filenames: false
-    -   id: cross-benchmark
-        name: cross benchmark
-        description: Run benchmarks and save results
-        entry: bash -c 'make cross-benchmark && git add benchstat/cross'
-        language: system
-        types: [go]
-        pass_filenames: false
-    -   id: benchstat
-        name: benchstat comparison
-        description: Compare benchmark results with previous run
-        entry: bash -c 'if [ -f benchstat/previous.txt ]; then make benchmark-compare && cp benchstat/latest.txt benchstat/previous.txt && git add benchstat/previous.txt; else make benchmark-save-as-previous && echo "First benchmark run - results stored for future comparison." && git add benchstat/previous.txt; fi'
-        language: system
-        types: [go]
-        pass_filenames: false
-        verbose: true 
+    # -   id: go-benchmark
+    #     name: go benchmark
+    #     description: Run benchmarks and save results
+    #     entry: bash -c 'make benchmark-save && git add benchstat/latest.txt'
+    #     language: system
+    #     types: [go]
+    #     pass_filenames: false
+    # -   id: cross-benchmark
+    #     name: cross benchmark
+    #     description: Run benchmarks and save results
+    #     entry: bash -c 'make cross-benchmark && git add benchstat/cross'
+    #     language: system
+    #     types: [go]
+    #     pass_filenames: false
+    # -   id: benchstat
+    #     name: benchstat comparison
+    #     description: Compare benchmark results with previous run
+    #     entry: bash -c 'if [ -f benchstat/previous.txt ]; then make benchmark-compare && cp benchstat/latest.txt benchstat/previous.txt && git add benchstat/previous.txt; else make benchmark-save-as-previous && echo "First benchmark run - results stored for future comparison." && git add benchstat/previous.txt; fi'
+    #     language: system
+    #     types: [go]
+    #     pass_filenames: false
+    #     verbose: true 

@@ -288,6 +288,30 @@ func TestTemplateString(t *testing.T) {
 			},
 			want: "[1, true, \"abc\"] {\"x\": 10, \"y\": false}",
 		},
+		{
+			name:     "list addition",
+			template: "{{ [1] + [2] }}",
+			context:  map[string]interface{}{},
+			want:     "[1, 2]",
+		},
+		{
+			name:     "list addition with variables",
+			template: "{{ [a] + [b] }}",
+			context:  map[string]interface{}{"a": 1, "b": 2},
+			want:     "[1, 2]",
+		},
+		{
+			name:     "list addition with variables and extra whitespaces",
+			template: "{{ [ a ] + [ b ] }}",
+			context:  map[string]interface{}{"a": 1, "b": 2},
+			want:     "[1, 2]",
+		},
+		{
+			name:     "dict addition",
+			template: "{{ { 'a': 1 } | union({ 'b': 2 }) }}",
+			context:  map[string]interface{}{},
+			want:     "{a: 1, b: 2}",
+		},
 	}
 
 	for _, tt := range tests {

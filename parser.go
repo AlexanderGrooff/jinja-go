@@ -59,7 +59,6 @@ const (
 	NodeExpression                 // Represents a Jinja expression, e.g., {{ variable }}.
 	NodeComment                    // Represents a comment, e.g., {# comment #}.
 	NodeControlTag                 // Represents a control structure tag, e.g., {% if ... %}.
-	// NodeTag                 // Future: Represents a control structure tag, e.g., {% if ... %}.
 )
 
 // evaluateFullExpressionInternal is the core logic for evaluating an expression string,

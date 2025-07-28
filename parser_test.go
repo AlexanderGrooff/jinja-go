@@ -350,6 +350,27 @@ func TestParser_ParseNext(t *testing.T) {
 			},
 		},
 		{
+			name:     "nested list literal",
+			template: "{{ [1, [2]] }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " [1, [2]] "},
+			},
+		},
+		{
+			name:     "dict expression",
+			template: "{{ {'a': 123} }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " {'a': 123} "},
+			},
+		},
+		{
+			name:     "nested dict expression",
+			template: "{{ {'a': {'b': 234}} }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " {'a': {'b': 234}} "},
+			},
+		},
+		{
 			name:     "list in for loop",
 			template: "{% for item in [1, 2, 3] %}{{ item }}{% endfor %}",
 			want: []*Node{
