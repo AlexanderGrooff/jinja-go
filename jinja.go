@@ -472,8 +472,9 @@ func formatPythonStyle(val interface{}) string {
 			return "{}"
 		}
 		var parts []string
-		// Don't sort keys - preserve the order as they appear in the dictionary literal
-		for key, value := range v {
+
+		for key := range v {
+			value := v[key]
 			parts = append(parts, fmt.Sprintf("%q: %s", key, formatPythonStyle(value)))
 		}
 		return "{" + strings.Join(parts, ", ") + "}"

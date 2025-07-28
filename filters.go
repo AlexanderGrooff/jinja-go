@@ -461,12 +461,62 @@ func b64decodeFilter(input interface{}, args ...interface{}) (interface{}, error
 	return string(decoded), nil
 }
 
+// toMap is a helper function to convert an interface to a map[string]interface{}
+func toMap(val interface{}) (map[string]interface{}, error) {
+	if val == nil {
+		return map[string]interface{}{}, nil
+	}
+	if m, ok := val.(map[string]interface{}); ok {
+		return m, nil
+	}
+	rv := reflect.ValueOf(val)
+	if rv.Kind() != reflect.Map {
+		return nil, fmt.Errorf("cannot convert %T to map", val)
+	}
+	result := make(map[string]interface{})
+	iter := rv.MapRange()
+	for iter.Next() {
+		key := fmt.Sprintf("%v", iter.Key().Interface())
+		result[key] = iter.Value().Interface()
+	}
+	return result, nil
+}
+
+// unionFilter implements the 'union' filter, which merges two dictionaries.
+func unionFilter(input interface{}, args ...interface{}) (interface{}, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("union filter requires a dictionary as an argument")
+	}
+
+	inputMap, err := toMap(input)
+	if err != nil {
+		return nil, fmt.Errorf("union filter input must be a dictionary, got %T: %w", input, err)
+	}
+
+	otherMap, err := toMap(args[0])
+	if err != nil {
+		return nil, fmt.Errorf("union filter argument must be a dictionary, got %T: %w", args[0], err)
+	}
+
+	// Create a new map to avoid modifying the original
+	result := make(map[string]interface{})
+	for k, v := range inputMap {
+		result[k] = v
+	}
+	for k, v := range otherMap {
+		result[k] = v
+	}
+
+	return result, nil
+}
+
 func init() {
 	// Initialize GlobalFilters after all filter functions are defined
 	GlobalFilters = map[string]FilterFunc{
 		"default":    defaultFilter,
 		"join":       joinFilter,
 		"upper":      upperFilter,
+		"union":      unionFilter,
 		"lower":      lowerFilter,
 		"capitalize": capitalizeFilter,
 		"replace":    replaceFilter,

@@ -523,24 +523,30 @@ func (p *ExprParser) parseExpression(precedence int) (*ExprNode, error) {
 					if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenRightParen {
 						p.pos++ // Empty arg list
 					} else {
+						// This loop is made more lenient to handle empty arguments (e.g., `(a,,b)` or `(,)`)
+						// which the old string-based parser supported.
 						for {
+							if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenRightParen {
+								break // End of arguments
+							}
+
+							// If the next token is a comma, it's an empty argument. Skip it.
+							if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenComma {
+								p.pos++
+								continue
+							}
+
 							arg, err := p.parseExpression(0)
 							if err != nil {
 								return nil, err
 							}
 							filterArgs = append(filterArgs, arg)
-							if p.pos >= len(p.tokens) {
-								return nil, fmt.Errorf("unexpected end of filter arguments, expected ')' or ',' at position %d", p.pos)
+
+							if p.pos < len(p.tokens) && p.tokens[p.pos].Type == TokenComma {
+								p.pos++ // Consume comma before next argument
 							}
-							if p.tokens[p.pos].Type == TokenRightParen {
-								p.pos++ // Consume ')'
-								break
-							}
-							if p.tokens[p.pos].Type != TokenComma {
-								return nil, fmt.Errorf("expected ',' or ')', found '%s' at position %d", p.tokens[p.pos].Value, p.pos)
-							}
-							p.pos++ // Consume ','
 						}
+						p.pos++ // Consume ')'
 					}
 				}
 				left = &ExprNode{

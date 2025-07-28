@@ -2,7 +2,6 @@ package jinja
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -90,345 +89,6 @@ func evaluateFullExpressionInternal(fullExprStr string, context map[string]inter
 	}
 
 	return val, false, nil
-}
-
-// evaluateComplexVariable handles dot notation (e.g., user.name) and subscript access (e.g., items[0])
-func evaluateComplexVariable(expression string, context map[string]interface{}) (interface{}, error) {
-	// This function handles dot notation (e.g., user.name) and subscript access (e.g., items[0])
-	var current interface{} = context
-	var err error
-
-	// Tokenize the expression by delimiters '.', '['
-	// This is a simplified approach. A proper parser would be more robust.
-	// Example: "user.address['city']" -> "user", ".address", "['city']"
-	// For now, let's split by '.' and handle brackets inside the loop
-	parts := strings.Split(expression, ".")
-	isInitial := true
-
-	for _, part := range parts {
-		if strings.TrimSpace(part) == "" {
-			continue // Should not happen with well-formed expressions
-		}
-
-		// Handle subscript access within the part, e.g., "items[0]"
-		subscriptMatch := strings.SplitN(part, "[", 2)
-		baseVar := subscriptMatch[0]
-
-		if isInitial {
-			var exists bool
-			current, exists = context[baseVar]
-			if !exists {
-				return nil, fmt.Errorf("variable '%s' not found", baseVar)
-			}
-			isInitial = false
-		} else if baseVar != "" {
-			// It's a dot access on the current value
-			if m, ok := current.(map[string]interface{}); ok {
-				var exists bool
-				current, exists = m[baseVar]
-				if !exists {
-					return nil, fmt.Errorf("key '%s' not found in map", baseVar)
-				}
-			} else {
-				return nil, fmt.Errorf("cannot access attribute '%s' on non-map type %T", baseVar, current)
-			}
-		}
-
-		if len(subscriptMatch) > 1 {
-			// We have a subscript part, e.g., "0]" or "'key']"
-			subscriptContent := strings.TrimSuffix(subscriptMatch[1], "]")
-
-			// The index/key itself can be an expression
-			indexVal, errEval := evaluateLiteralOrVariable(subscriptContent, context)
-			if errEval != nil {
-				return nil, fmt.Errorf("failed to evaluate subscript index/key '%s': %v", subscriptContent, errEval)
-			}
-
-			switch c := current.(type) {
-			case []interface{}:
-				idx, ok := indexVal.(int)
-				if !ok {
-					return nil, fmt.Errorf("list index must be an integer, got %T", indexVal)
-				}
-				if idx < 0 || idx >= len(c) {
-					return nil, fmt.Errorf("index %d out of bounds for list of length %d", idx, len(c))
-				}
-				current = c[idx]
-			case map[string]interface{}:
-				key, ok := indexVal.(string)
-				if !ok {
-					return nil, fmt.Errorf("map key must be a string, got %T", indexVal)
-				}
-				var exists bool
-				current, exists = c[key]
-				if !exists {
-					return nil, fmt.Errorf("key '%s' not found in map", key)
-				}
-			default:
-				return nil, fmt.Errorf("cannot apply subscript access to type %T", current)
-			}
-		}
-	}
-
-	return current, err
-}
-
-// evaluateLiteralOrVariable tries to parse a string as a literal (string, int, bool)
-// or looks it up as a variable in the context.
-func evaluateLiteralOrVariable(s string, context map[string]interface{}) (interface{}, error) {
-	trimmed := strings.TrimSpace(s)
-	if len(trimmed) == 0 {
-		return nil, fmt.Errorf("empty string cannot be evaluated as a literal or variable for filter argument")
-	}
-
-	// Check for string literal (single or double quotes)
-	if (strings.HasPrefix(trimmed, "'") && strings.HasSuffix(trimmed, "'")) ||
-		(strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"")) {
-		if len(trimmed) >= 2 {
-			return unescapeString(trimmed[1 : len(trimmed)-1]), nil
-		}
-		return "", nil // Should ideally not happen if prefix/suffix matched
-	}
-
-	// Check for boolean
-	if trimmed == "true" {
-		return true, nil
-	}
-	if trimmed == "false" {
-		return false, nil
-	}
-
-	// Check for integer
-	if i, err := strconv.Atoi(trimmed); err == nil {
-		return i, nil
-	}
-
-	// Check for float (Jinja supports float literals e.g. 3.14)
-	if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
-		return f, nil
-	}
-
-	// Assume it's a variable name if not a recognized literal
-	if !isValidJinjaIdentifier(trimmed) {
-		// This case means it's not a simple literal, and not a valid var name.
-		// e.g. an arg like "foo bar" (unquoted) or "foo[bar"
-		return nil, fmt.Errorf("filter argument '%s' is not a valid literal or variable name", trimmed)
-	}
-
-	val, exists := context[trimmed]
-	if !exists {
-		return nil, fmt.Errorf("variable '%s' used as filter argument not found in context", trimmed)
-	}
-	return val, nil
-}
-
-// unescapeString handles basic unescaping for string literals.
-func unescapeString(s string) string {
-	s = strings.ReplaceAll(s, "\\'", "'")   // Escaped single quote
-	s = strings.ReplaceAll(s, "\\\"", "\"") // Escaped double quote
-	s = strings.ReplaceAll(s, "\\\\", "\\") // Escaped backslash
-	s = strings.ReplaceAll(s, "\\n", "\n")  // Escaped newline
-	s = strings.ReplaceAll(s, "\\t", "\t")  // Escaped tab
-	s = strings.ReplaceAll(s, "\\r", "\r")  // Escaped carriage return
-	return s
-}
-
-// isValidJinjaIdentifier checks if a string is a valid Jinja identifier (simplified).
-// It's used for variable names and filter arguments that are variables.
-func isValidJinjaIdentifier(name string) bool {
-	if name == "" {
-		return false // An empty string is not a valid identifier.
-	}
-	// Crude check: disallow whitespace and characters used in Jinja syntax for pipes, calls, literals.
-	// Jinja identifiers are more like Python: start with letter or underscore, then letters, numbers, underscores.
-	// This is a much simpler check for now.
-	// The set of characters to disallow in an identifier:
-	// space, tab, newline, CR, {, }, |, ", ', (, ), ,, [, ]
-	disallowedChars := " \t\n\r{{}}|'\"(),[]" // Note: " is escaped as \"
-	if strings.ContainsAny(name, disallowedChars) {
-		return false
-	}
-	// Optionally, check if it starts with a digit if that's not allowed for your var names
-	// (unless it's purely a number, which is handled by literal parsing already).
-	// For now, if it passes ContainsAny, it's "valid enough" for this simplified model.
-	return true
-}
-
-// splitExpressionWithFilters splits an expression string by the pipe '|'
-// ensuring that pipes within string literals or parentheses are ignored. This is a simplified version.
-func splitExpressionWithFilters(fullExprStr string) []string {
-	var parts []string
-	var currentPart strings.Builder
-	inSingleQuote := false
-	inDoubleQuote := false
-	parenLevel := 0   // To ignore pipes within parentheses, e.g. a_func(b | c)
-	bracketLevel := 0 // To ignore pipes within list literals
-	braceLevel := 0   // To ignore pipes within dict literals
-
-	for i, r := range fullExprStr {
-		switch r {
-		case '\'':
-			if i > 0 && fullExprStr[i-1] != '\\' { // Not an escaped backslash before quote
-				inSingleQuote = !inSingleQuote
-			}
-			currentPart.WriteRune(r)
-		case '"':
-			if i > 0 && fullExprStr[i-1] != '\\' {
-				inDoubleQuote = !inDoubleQuote
-			}
-			currentPart.WriteRune(r)
-		case '(': // Parentheses
-			if !inSingleQuote && !inDoubleQuote {
-				parenLevel++
-			}
-			currentPart.WriteRune(r)
-		case ')':
-			if !inSingleQuote && !inDoubleQuote {
-				if parenLevel > 0 {
-					parenLevel--
-				}
-			}
-			currentPart.WriteRune(r)
-		case '[':
-			if !inSingleQuote && !inDoubleQuote {
-				bracketLevel++
-			}
-			currentPart.WriteRune(r)
-		case ']':
-			if !inSingleQuote && !inDoubleQuote {
-				if bracketLevel > 0 {
-					bracketLevel--
-				}
-			}
-			currentPart.WriteRune(r)
-		case '{':
-			if !inSingleQuote && !inDoubleQuote {
-				braceLevel++
-			}
-			currentPart.WriteRune(r)
-		case '}':
-			if !inSingleQuote && !inDoubleQuote {
-				if braceLevel > 0 {
-					braceLevel--
-				}
-			}
-			currentPart.WriteRune(r)
-		case '|':
-			if !inSingleQuote && !inDoubleQuote && parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
-				parts = append(parts, strings.TrimSpace(currentPart.String()))
-				currentPart.Reset()
-			} else {
-				currentPart.WriteRune(r)
-			}
-		default:
-			currentPart.WriteRune(r)
-		}
-	}
-	parts = append(parts, strings.TrimSpace(currentPart.String()))
-
-	// Filter out any truly empty parts that might result from multiple pipes, e.g., "var || filter"
-	// or leading/trailing pipes if not handled by TrimSpace on currentPart effectively enough.
-	finalParts := []string{}
-	for _, p := range parts {
-		if p != "" { // Only add non-empty parts
-			finalParts = append(finalParts, p)
-		} else if len(finalParts) == 0 && len(parts) > 1 {
-			// Handle cases like "{{ | default('foo') }}" -> parts might be ["", "default('foo')"]
-			// The first part being empty is handled in evaluateFullExpressionInternal
-			finalParts = append(finalParts, p) // Keep the leading empty part if it's intentional.
-		}
-	}
-	if len(finalParts) == 0 && fullExprStr != "" && strings.TrimSpace(fullExprStr) != "" {
-		// If fullExprStr was e.g. "   " and split into nothing, but evaluateFullExpressionInternal expects baseExpr.
-		// This can happen if fullExprStr is just whitespace. split gives [""] or [].
-		// evaluateFullExpressionInternal handles empty baseExpr.
-		return []string{strings.TrimSpace(fullExprStr)} // Ensure at least the trimmed original if it was all spaces
-	}
-
-	return finalParts
-}
-
-// parseListItems parses the content of a Jinja list literal, e.g. "item1, 'item2', var3"
-func parseListItems(content string, context map[string]interface{}) ([]interface{}, error) {
-	if strings.TrimSpace(content) == "" {
-		return []interface{}{}, nil
-	}
-	rawItems := splitArguments(content, ',')
-	var items []interface{}
-	for _, rawItem := range rawItems {
-		trimmedItem := strings.TrimSpace(rawItem)
-		if trimmedItem == "" {
-			continue // Allow trailing commas or empty items
-		}
-		// Use evaluateLiteralOrVariable for each item. This is a simplification.
-		// A full implementation would need to handle complex expressions as items.
-		itemValue, err := evaluateLiteralOrVariable(trimmedItem, context)
-		if err != nil {
-			// fallback to EvaluateExpression for more complex list items
-			if evaluateExpressionFunc != nil {
-				itemValue, err = evaluateExpressionFunc(trimmedItem, context)
-				if err != nil {
-					return nil, fmt.Errorf("could not evaluate list item '%s': %v", trimmedItem, err)
-				}
-			} else {
-				return nil, fmt.Errorf("EvaluateExpression not initialized")
-			}
-		}
-		items = append(items, itemValue)
-	}
-	return items, nil
-}
-
-// parseFilterCall parses a filter string like "default('fallback', true)"
-// into filter name "default" and raw (un-evaluated) arguments ["'fallback'", "true"].
-func parseFilterCall(filterCallStr string) (name string, args []string, err error) {
-	filterCallStr = strings.TrimSpace(filterCallStr)
-	openParen := strings.Index(filterCallStr, "(")
-
-	if openParen == -1 { // Filter without arguments, e.g., {{ my_var | upper }}
-		if !isValidJinjaIdentifier(filterCallStr) { // Validate filter name itself
-			return "", nil, fmt.Errorf("invalid filter name: '%s'", filterCallStr)
-		}
-		return filterCallStr, nil, nil
-	}
-
-	// Ensure the character before '(' is not part of a valid identifier, if '(' is not at the start
-	// This is to prevent misinterpreting something like "func(arg)" as filter "func(arg)".
-	// Filter names should be simple identifiers.
-	filterNameCandidate := strings.TrimSpace(filterCallStr[:openParen])
-	if !isValidJinjaIdentifier(filterNameCandidate) {
-		return "", nil, fmt.Errorf("invalid filter name format before '(': '%s'", filterNameCandidate)
-	}
-	name = filterNameCandidate
-
-	if !strings.HasSuffix(filterCallStr, ")") {
-		return "", nil, fmt.Errorf("filter call with arguments missing closing parenthesis: '%s'", filterCallStr)
-	}
-
-	argsStr := filterCallStr[openParen+1 : len(filterCallStr)-1] // Content between ()
-
-	if strings.TrimSpace(argsStr) == "" { // Handles "filter()" - no arguments
-		return name, []string{}, nil
-	}
-
-	parsedArgs := splitArguments(argsStr, ',')
-
-	// Filter out any empty strings that might result from parsing ", ," or trailing commas, unless it's a single empty string literal.
-	// Example: default('') should yield one arg: "''"
-	// default(a,,b) should yield "a", "b" (middle one skipped if truly empty after trim)
-	finalArgs := []string{}
-	for _, arg := range parsedArgs {
-		trimmedArg := strings.TrimSpace(arg)
-		if trimmedArg != "" { // Only add non-empty args after trim
-			finalArgs = append(finalArgs, trimmedArg)
-		} else if (strings.HasPrefix(arg, "'") && strings.HasSuffix(arg, "'") && len(arg) == 2) ||
-			(strings.HasPrefix(arg, "\"") && strings.HasSuffix(arg, "\"") && len(arg) == 2) {
-			// It's an explicit empty string literal like '' or ""
-			finalArgs = append(finalArgs, arg)
-		}
-	}
-
-	return name, finalArgs, nil
 }
 
 // parseCommentTag is called when "{#" is found.
@@ -580,6 +240,10 @@ func (p *Parser) parseControlTag() *Node {
 	searchIndex := p.pos
 	var controlContentEnd int = -1
 
+	parenLevel := 0
+	bracketLevel := 0
+	braceLevel := 0
+
 	for searchIndex < len(p.input) {
 		// String literal skipping logic
 		if p.input[searchIndex] == '\'' || p.input[searchIndex] == '"' {
@@ -621,9 +285,42 @@ func (p *Parser) parseControlTag() *Node {
 			continue // Continue main scan for '%}'
 		}
 
+		// Check for nested tags first to avoid misinterpreting them as grouping symbols
+		if searchIndex+1 < len(p.input) {
+			if p.input[searchIndex] == '{' && (p.input[searchIndex+1] == '{' || p.input[searchIndex+1] == '%' || p.input[searchIndex+1] == '#') {
+				// This is a nested Jinja tag, which is not allowed inside a control tag's logic.
+				// However, for robust parsing, we should ideally handle it.
+				// For now, we will let the grouping logic handle it, which might be incorrect for complex cases.
+			}
+		}
+
+		// Track grouping levels to correctly find the end of the control tag
+		switch p.input[searchIndex] {
+		case '(':
+			parenLevel++
+		case ')':
+			if parenLevel > 0 {
+				parenLevel--
+			}
+		case '[':
+			bracketLevel++
+		case ']':
+			if bracketLevel > 0 {
+				bracketLevel--
+			}
+		case '{':
+			braceLevel++
+		case '}':
+			if braceLevel > 0 {
+				braceLevel--
+			}
+		}
+
 		if searchIndex+1 < len(p.input) && p.input[searchIndex] == '%' && p.input[searchIndex+1] == '}' {
-			controlContentEnd = searchIndex // Marks start of "%}"
-			break                           // Found matching "%}"
+			if parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
+				controlContentEnd = searchIndex // Marks start of "%}"
+				break                           // Found matching "%}"
+			}
 		}
 		searchIndex++
 	}
@@ -730,6 +427,23 @@ func (p *Parser) parseExpressionTag() *Node {
 			continue // Continue main scan for '{{' or '}}'
 		}
 
+		// Check for nested {{ and }} before handling grouping symbols
+		if searchIndex+1 < len(p.input) {
+			if p.input[searchIndex] == '{' && p.input[searchIndex+1] == '{' {
+				level++
+				searchIndex += 2
+				continue
+			} else if p.input[searchIndex] == '}' && p.input[searchIndex+1] == '}' {
+				if level == 1 && parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
+					expressionContentEnd = searchIndex // Marks start of "}}"
+					break                              // Found matching }}
+				}
+				level--
+				searchIndex += 2
+				continue
+			}
+		}
+
 		// Track grouping levels
 		switch p.input[searchIndex] {
 		case '(':
@@ -752,22 +466,6 @@ func (p *Parser) parseExpressionTag() *Node {
 			}
 		}
 
-		// Check for nested {{ and }}
-		if searchIndex+1 < len(p.input) {
-			if p.input[searchIndex] == '{' && p.input[searchIndex+1] == '{' {
-				level++
-				searchIndex += 2
-				continue
-			} else if p.input[searchIndex] == '}' && p.input[searchIndex+1] == '}' {
-				if level == 1 && parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
-					expressionContentEnd = searchIndex // Marks start of "}}"
-					break                              // Found matching }}
-				}
-				level--
-				searchIndex += 2
-				continue
-			}
-		}
 		searchIndex++
 	}
 
@@ -936,64 +634,4 @@ func (p *Parser) ParseNext() (*Node, error) {
 		p.pos += nextMarkerPos // Advance p.pos to the start of the next marker
 		return &Node{Type: NodeText, Content: content}, nil
 	}
-}
-
-// splitArguments is a helper to split a string by a separator, respecting quotes and nested structures.
-func splitArguments(s string, separator rune) []string {
-	var parts []string
-	var currentPart strings.Builder
-	inSingleQuote := false
-	inDoubleQuote := false
-	parenLevel := 0
-	bracketLevel := 0 // for lists
-	braceLevel := 0   // for dicts
-
-	for i, r := range s {
-		writeRune := true
-		switch r {
-		case '\'':
-			if i == 0 || s[i-1] != '\\' {
-				inSingleQuote = !inSingleQuote
-			}
-		case '"':
-			if i == 0 || s[i-1] != '\\' {
-				inDoubleQuote = !inDoubleQuote
-			}
-		case '(':
-			if !inSingleQuote && !inDoubleQuote {
-				parenLevel++
-			}
-		case ')':
-			if !inSingleQuote && !inDoubleQuote {
-				parenLevel--
-			}
-		case '[':
-			if !inSingleQuote && !inDoubleQuote {
-				bracketLevel++
-			}
-		case ']':
-			if !inSingleQuote && !inDoubleQuote {
-				bracketLevel--
-			}
-		case '{':
-			if !inSingleQuote && !inDoubleQuote {
-				braceLevel++
-			}
-		case '}':
-			if !inSingleQuote && !inDoubleQuote {
-				braceLevel--
-			}
-		default:
-			if r == separator && !inSingleQuote && !inDoubleQuote && parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
-				parts = append(parts, strings.TrimSpace(currentPart.String()))
-				currentPart.Reset()
-				writeRune = false
-			}
-		}
-		if writeRune {
-			currentPart.WriteRune(r)
-		}
-	}
-	parts = append(parts, strings.TrimSpace(currentPart.String()))
-	return parts
 }
