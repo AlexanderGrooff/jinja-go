@@ -434,13 +434,16 @@ func (p *Parser) parseExpressionTag() *Node {
 				searchIndex += 2
 				continue
 			} else if p.input[searchIndex] == '}' && p.input[searchIndex+1] == '}' {
-				if level == 1 && parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
-					expressionContentEnd = searchIndex // Marks start of "}}"
-					break                              // Found matching }}
+				// Only treat as a tag delimiter if we are not inside other braces/brackets/parens
+				if parenLevel == 0 && bracketLevel == 0 && braceLevel == 0 {
+					if level == 1 {
+						expressionContentEnd = searchIndex // Marks start of "}}"
+						break                              // Found matching }}
+					}
+					level--
+					searchIndex += 2
+					continue
 				}
-				level--
-				searchIndex += 2
-				continue
 			}
 		}
 

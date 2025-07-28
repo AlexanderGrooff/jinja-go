@@ -386,6 +386,79 @@ func TestParser_ParseNext(t *testing.T) {
 				{Type: NodeExpression, Content: " [ 1,  '2' ,   three  ] "},
 			},
 		},
+		{
+			name:     "list of dictionaries in expression",
+			template: "{{ [{'a': 1}, {'b': 2}] }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " [{'a': 1}, {'b': 2}] "},
+			},
+		},
+		{
+			name:     "dictionary with list value in expression",
+			template: "{{ {'key': [1, 2, 3]} }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " {'key': [1, 2, 3]} "},
+			},
+		},
+		{
+			name:     "deeply nested mixed structure in expression",
+			template: "{{ {'a': [1, {'b': [2, {'c': 3}]}]} }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " {'a': [1, {'b': [2, {'c': 3}]}]} "},
+			},
+		},
+		{
+			name:     "expression with string literal containing braces",
+			template: "{{ \"foo { 'a': 1 } bar\" }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " \"foo { 'a': 1 } bar\" "},
+			},
+		},
+		{
+			name:     "dict in text",
+			template: "text {{ {'a': 1} }} more text",
+			want: []*Node{
+				{Type: NodeText, Content: "text "},
+				{Type: NodeExpression, Content: " {'a': 1} "},
+				{Type: NodeText, Content: " more text"},
+			},
+		},
+		{
+			name:     "missing closed tag is treated as text",
+			template: "text {{ {'a': 1} } more text",
+			want: []*Node{
+				{Type: NodeText, Content: "text "},
+				{Type: NodeText, Content: "{{ {'a': 1} } more text"},
+			},
+		},
+		{
+			name:     "control tag with dictionary literal",
+			template: "{% if data == {'key': 'value'} %}",
+			want: []*Node{
+				{Type: NodeControlTag, Content: "if data == {'key': 'value'}", Control: &ControlTagInfo{Type: ControlIf, Expression: "data == {'key': 'value'}"}},
+			},
+		},
+		{
+			name:     "control tag with nested dictionary literal",
+			template: "{% if data == {'a': {'b': 1}} %}",
+			want: []*Node{
+				{Type: NodeControlTag, Content: "if data == {'a': {'b': 1}}", Control: &ControlTagInfo{Type: ControlIf, Expression: "data == {'a': {'b': 1}}"}},
+			},
+		},
+		{
+			name:     "comment containing various braces",
+			template: "{# a comment with { and } and {{ and }} and {% and %} #}",
+			want: []*Node{
+				{Type: NodeComment, Content: " a comment with { and } and {{ and }} and {% and %} "},
+			},
+		},
+		{
+			name:     "expression with mixed grouping symbols",
+			template: "{{ ([{'a': 1}]) }}",
+			want: []*Node{
+				{Type: NodeExpression, Content: " ([{'a': 1}]) "},
+			},
+		},
 	}
 
 	for _, tt := range tests {
