@@ -162,7 +162,7 @@ func TestTemplateString(t *testing.T) {
 			name:     "template with default filter for empty string variable",
 			template: "Value: {{ empty_val | default('DefaultValue') }}",
 			context:  map[string]interface{}{"empty_val": ""},
-			want:     "Value: DefaultValue",
+			want:     "Value: ",
 		},
 		{
 			name:     "template with default filter for zero value variable",
@@ -174,7 +174,7 @@ func TestTemplateString(t *testing.T) {
 			name:     "template with default filter for false variable",
 			template: "Enabled: {{ flag | default(true) }}",
 			context:  map[string]interface{}{"flag": false},
-			want:     "Enabled: true",
+			want:     "Enabled: false",
 		},
 		{
 			name:     "template with default filter with variable as default",
@@ -193,6 +193,37 @@ func TestTemplateString(t *testing.T) {
 			template: "Value: {{ nil_val | default('IsNil') }}",
 			context:  map[string]interface{}{"nil_val": nil},
 			want:     "Value: IsNil",
+		},
+		// Omit keyword tests for TemplateString
+		{
+			name:     "template with default filter using omit for undefined variable",
+			template: "{{ undefined_var | default(omit) }}",
+			context:  map[string]interface{}{},
+			want:     "",
+		},
+		{
+			name:     "template with default filter using omit for defined variable",
+			template: "{{ defined_var | default(omit) }}",
+			context:  map[string]interface{}{"defined_var": "Hello"},
+			want:     "Hello",
+		},
+		{
+			name:     "template with default filter using omit for empty string variable",
+			template: "{{ empty_var | default(omit) }}",
+			context:  map[string]interface{}{"empty_var": ""},
+			want:     "",
+		},
+		{
+			name:     "template with default filter using omit for false variable",
+			template: "{{ false_var | default(omit) }}",
+			context:  map[string]interface{}{"false_var": false},
+			want:     "false",
+		},
+		{
+			name:     "template with default filter using omit for zero value variable",
+			template: "{{ zero_var | default(omit) }}",
+			context:  map[string]interface{}{"zero_var": 0},
+			want:     "0",
 		},
 		// Comment Tests for TemplateString
 		{
@@ -436,7 +467,7 @@ func TestEvaluateExpression(t *testing.T) {
 			name:       "evaluate default filter for empty string variable",
 			expression: "empty_val | default('DefaultValue')",
 			context:    map[string]interface{}{"empty_val": ""},
-			want:       "DefaultValue",
+			want:       "",
 			wantErr:    false,
 		},
 		{
@@ -450,7 +481,7 @@ func TestEvaluateExpression(t *testing.T) {
 			name:       "evaluate default filter for false variable",
 			expression: "flag | default(true)",
 			context:    map[string]interface{}{"flag": false},
-			want:       true,
+			want:       false,
 			wantErr:    false,
 		},
 		{
@@ -472,6 +503,42 @@ func TestEvaluateExpression(t *testing.T) {
 			expression: "nil_val | default('IsNil')",
 			context:    map[string]interface{}{"nil_val": nil},
 			want:       "IsNil",
+			wantErr:    false,
+		},
+		// Omit keyword tests for EvaluateExpression
+		{
+			name:       "evaluate default filter using omit for undefined variable",
+			expression: "undefined_var | default(omit)",
+			context:    map[string]interface{}{},
+			want:       Omit,
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter using omit for defined variable",
+			expression: "defined_var | default(omit)",
+			context:    map[string]interface{}{"defined_var": "Hello"},
+			want:       "Hello",
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter not using omit for empty string variable",
+			expression: "empty_var | default(omit)",
+			context:    map[string]interface{}{"empty_var": ""},
+			want:       "",
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter not using omit for false variable",
+			expression: "false_var | default(omit)",
+			context:    map[string]interface{}{"false_var": false},
+			want:       false,
+			wantErr:    false,
+		},
+		{
+			name:       "evaluate default filter not using omit for zero value variable",
+			expression: "zero_var | default(omit)",
+			context:    map[string]interface{}{"zero_var": 0},
+			want:       0,
 			wantErr:    false,
 		},
 		// EvaluateExpression specific error case for undefined without default
@@ -2595,6 +2662,12 @@ func TestParseVariables(t *testing.T) {
 			want:     []string{"foo", "bar"},
 			wantErr:  false,
 		},
+		{
+			name:     "omit in default filter",
+			template: "{{ foo | default(omit) }}",
+			want:     []string{"foo"}, // Note: NOT 'omit' variable needed
+			wantErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2700,6 +2773,101 @@ func TestTemplateString_ForLoopWithListLiteral(t *testing.T) {
 	}
 }
 
+func TestTryEvaluateSingleExpressionTemplate(t *testing.T) {
+	tests := []struct {
+		name       string
+		template   string
+		context    map[string]interface{}
+		wantSingle bool
+		wantUndef  bool
+		wantVal    interface{}
+		wantErr    bool
+		assertOmit bool
+	}{
+		{
+			name:       "single expression simple var",
+			template:   "{{ name }}",
+			context:    map[string]interface{}{"name": "Jinja"},
+			wantSingle: true,
+			wantUndef:  false,
+			wantVal:    "Jinja",
+			wantErr:    false,
+		},
+		{
+			name:       "single expression undefined var",
+			template:   "{{ missing }}",
+			context:    map[string]interface{}{},
+			wantSingle: true,
+			wantUndef:  true,
+			wantVal:    nil,
+			wantErr:    false,
+		},
+		{
+			name:       "single expression default omit",
+			template:   "{{ missing | default(omit) }}",
+			context:    map[string]interface{}{},
+			wantSingle: true,
+			wantUndef:  false,
+			wantVal:    nil, // ignored when assertOmit is true
+			wantErr:    false,
+			assertOmit: true,
+		},
+		{
+			name:       "single expression with comments and whitespace",
+			template:   "  {# c #}\n\t{{ name }}  ",
+			context:    map[string]interface{}{"name": "X"},
+			wantSingle: true,
+			wantUndef:  false,
+			wantVal:    "X",
+			wantErr:    false,
+		},
+		{
+			name:       "not a single expression (text + expr)",
+			template:   "Hello {{ name }}",
+			context:    map[string]interface{}{"name": "Y"},
+			wantSingle: false,
+			wantUndef:  false,
+			wantVal:    nil,
+			wantErr:    false,
+		},
+		{
+			name:       "single expression with evaluation error (unknown filter)",
+			template:   "{{ 1 | no_such_filter }}",
+			context:    map[string]interface{}{},
+			wantSingle: true,
+			wantUndef:  false,
+			wantVal:    nil,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, isSingle, wasUndef, err := TryEvaluateSingleExpressionTemplate(tt.template, tt.context)
+			if isSingle != tt.wantSingle {
+				t.Errorf("isSingle = %v, want %v", isSingle, tt.wantSingle)
+			}
+			if wasUndef != tt.wantUndef {
+				t.Errorf("wasUndefined = %v, want %v", wasUndef, tt.wantUndef)
+			}
+			if (err != nil) != tt.wantErr {
+				t.Errorf("err != wantErr: err=%v wantErr=%v", err, tt.wantErr)
+			}
+			if tt.assertOmit {
+				if _, ok := val.(OmitType); !ok {
+					t.Errorf("expected OmitType, got %T (%v)", val, val)
+				}
+				return
+			}
+			if tt.wantSingle && !tt.wantErr && !tt.wantUndef {
+				if !reflect.DeepEqual(val, tt.wantVal) {
+					t.Errorf("val = %v (%T), want %v (%T)", val, val, tt.wantVal, tt.wantVal)
+				}
+			}
+		})
+	}
+}
+
 func TestLALRParserComplexExpression(t *testing.T) {
 	// Test that the LALR parser can now handle the complex expression
 	expression := "(interfaces + (lookup('template', 'arista_interfaces.yaml.j2') | from_yaml or [])) | sort_interfaces"
@@ -2794,4 +2962,63 @@ func TestDebugIsNotOperator(t *testing.T) {
 	// Test with ParseAndEvaluate
 	result2, err2 := ParseAndEvaluate(expr, map[string]interface{}{})
 	t.Logf("ParseAndEvaluate result: %v, error: %v", result2, err2)
+}
+
+func TestLexerOmitKeyword(t *testing.T) {
+	// Test that the 'omit' keyword is properly tokenized
+	expression := "omit"
+
+	lexer := NewLexer(expression)
+	tokens, err := lexer.Tokenize()
+	if err != nil {
+		t.Fatalf("Tokenization failed: %v", err)
+	}
+
+	// Should have exactly 2 tokens: omit + EOF
+	if len(tokens) != 2 {
+		t.Fatalf("Expected 2 tokens, got %d", len(tokens))
+	}
+
+	// First token should be 'omit' as a literal
+	if tokens[0].Type != TokenLiteral {
+		t.Errorf("Expected first token to be TokenLiteral, got %v", tokens[0].Type)
+	}
+	if tokens[0].Value != "omit" {
+		t.Errorf("Expected first token value to be 'omit', got '%s'", tokens[0].Value)
+	}
+
+	// Second token should be EOF
+	if tokens[1].Type != TokenEOF {
+		t.Errorf("Expected second token to be TokenEOF, got %v", tokens[1].Type)
+	}
+}
+
+func TestLexerOmitInDefaultFilter(t *testing.T) {
+	// Test that 'omit' is properly tokenized in a filter expression
+	expression := "var | default(omit)"
+
+	lexer := NewLexer(expression)
+	tokens, err := lexer.Tokenize()
+	if err != nil {
+		t.Fatalf("Tokenization failed: %v", err)
+	}
+
+	// Should have several tokens: var, |, default, (, omit, )
+	t.Log("Tokens:")
+	for i, token := range tokens {
+		t.Logf("  %d: %s (%v)", i, token.Value, token.Type)
+	}
+
+	// Find the 'omit' token
+	foundOmit := false
+	for _, token := range tokens {
+		if token.Value == "omit" && token.Type == TokenLiteral {
+			foundOmit = true
+			break
+		}
+	}
+
+	if !foundOmit {
+		t.Error("Expected 'omit' to be tokenized as a literal")
+	}
 }

@@ -73,6 +73,56 @@ func TemplateString(template string, context map[string]interface{}) (string, er
 	return sb.String(), nil
 }
 
+// TryEvaluateSingleExpressionTemplate determines if the provided template consists of
+// exactly one expression node (ignoring surrounding whitespace and comments), and if so,
+// evaluates it and returns the typed value. It returns:
+// - value: the evaluated value of the single expression
+// - isSingle: whether the template is a single expression template
+// - wasUndefined: whether the expression evaluated to a strictly undefined value
+// - err: any parsing or evaluation error encountered
+func TryEvaluateSingleExpressionTemplate(template string, context map[string]interface{}) (interface{}, bool, bool, error) {
+	// Parse the template (reusing the same parser logic as TemplateString)
+	nodes, found := defaultTemplateCache.Get(template)
+	if !found {
+		parser := NewParser(template)
+		var err error
+		nodes, err = parser.ParseAll()
+		if err != nil {
+			return nil, false, false, fmt.Errorf("template parsing error: %w", err)
+		}
+		defaultTemplateCache.Set(template, nodes)
+	}
+
+	// Filter out whitespace-only text and comments
+	filtered := make([]*Node, 0, len(nodes))
+	for _, n := range nodes {
+		switch n.Type {
+		case NodeComment:
+			// ignore
+			continue
+		case NodeText:
+			if strings.TrimSpace(n.Content) == "" {
+				continue
+			}
+			// Non-whitespace text means it's not a single expression template
+			filtered = append(filtered, n)
+		default:
+			filtered = append(filtered, n)
+		}
+	}
+
+	if len(filtered) != 1 || filtered[0].Type != NodeExpression {
+		return nil, false, false, nil
+	}
+
+	// Evaluate the single expression using the internal evaluator to obtain typed value
+	val, wasStrictlyUndefined, err := evaluateFullExpressionInternal(filtered[0].Content, context)
+	if err != nil {
+		return nil, true, false, fmt.Errorf("error evaluating expression '{{ %s }}': %v", filtered[0].Content, err)
+	}
+	return val, true, wasStrictlyUndefined, nil
+}
+
 func processExpression(node *Node, context map[string]any, result *strings.Builder) error {
 	// With the new LALR-based `evaluateFullExpressionInternal`, we can process all expressions uniformly.
 	val, wasUndefined, err := evaluateFullExpressionInternal(node.Content, context)
@@ -90,6 +140,9 @@ func processExpression(node *Node, context map[string]any, result *strings.Build
 		result.WriteString(v)
 	case nil:
 		// nil values render as empty strings
+		// Do nothing, no output
+	case OmitType:
+		// Omit values should not be rendered at all
 		// Do nothing, no output
 	default:
 		// Use the generic Python-style formatter for all types

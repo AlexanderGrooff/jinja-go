@@ -80,6 +80,12 @@ func TestParseAndEvaluate(t *testing.T) {
 			context: map[string]interface{}{},
 			want:    nil,
 		},
+		{
+			name:    "omit literal",
+			expr:    "omit",
+			context: map[string]interface{}{},
+			want:    Omit,
+		},
 
 		// Variable access
 		{
@@ -87,6 +93,37 @@ func TestParseAndEvaluate(t *testing.T) {
 			expr:    "name",
 			context: map[string]interface{}{"name": "Alice"},
 			want:    "Alice",
+		},
+		// Omit keyword tests
+		{
+			name:    "omit in default filter",
+			expr:    "undefined_var | default(omit)",
+			context: map[string]interface{}{},
+			want:    Omit,
+		},
+		{
+			name:    "omit in default filter with truthy value",
+			expr:    "defined_var | default(omit)",
+			context: map[string]interface{}{"defined_var": "Hello"},
+			want:    "Hello",
+		},
+		{
+			name:    "omit in default filter with omit value",
+			expr:    "omit | default(omit)",
+			context: map[string]interface{}{},
+			want:    Omit,
+		},
+		{
+			name:    "omit in if expression",
+			expr:    "defined_var if defined_var else omit",
+			context: map[string]interface{}{"defined_var": "Hello"},
+			want:    "Hello",
+		},
+		{
+			name:    "omit in if expression with truthy value",
+			expr:    "omit if defined_var else 123",
+			context: map[string]interface{}{"defined_var": "Hello"},
+			want:    Omit,
 		},
 		{
 			name:      "undefined variable",

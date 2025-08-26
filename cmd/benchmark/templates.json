@@ -155,5 +155,17 @@
     "context": {
       "text": "hello world test string"
     }
+  },
+  {
+    "name": "omit_in_default_filter",
+    "template": "{{ undefined_var | default(omit) }}",
+    "context": {}
+  },
+  {
+    "name": "omit_in_default_filter_with_defined_var",
+    "template": "{{ defined_var | default(omit) }}",
+    "context": {
+      "defined_var": "Hello"
+    }
   }
 ] 

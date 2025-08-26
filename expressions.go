@@ -144,6 +144,20 @@ type Lexer struct {
 	tokens     []Token // Collected tokens
 }
 
+// UndefinedType is a sentinel type for undefined variables in Jinja expressions
+// It is used to distinguish between nil (which is a valid value) and undefined (which is not set in context)
+type UndefinedType struct{}
+
+// Undefined is the singleton value representing an undefined variable
+var Undefined = UndefinedType{}
+
+// OmitType is a sentinel type for the 'omit' keyword in Jinja expressions
+// It is used in filters like default(omit) to indicate that a value should be omitted
+type OmitType struct{}
+
+// Omit is the singleton value representing the 'omit' keyword
+var Omit = OmitType{}
+
 // NewLexer creates a new lexer instance for the given input string.
 func NewLexer(input string) *Lexer {
 	return &Lexer{
@@ -381,13 +395,17 @@ func (l *Lexer) tokenizeIdentifierOrKeyword() {
 
 	// Check if it's a keyword operator - only match exact keywords
 	// This prevents splitting identifiers like "interfaces" into "in" + "terfaces"
-	if word == "True" || word == "False" || word == "None" || word == "true" || word == "false" || word == "none" {
+	switch word {
+	case "True", "False", "None", "true", "false", "none":
 		// Handle boolean literals and None
 		l.tokens = append(l.tokens, Token{Type: TokenLiteral, Value: word, Position: start})
-	} else if word == "and" || word == "or" || word == "not" || word == "in" || word == "is" {
+	case "and", "or", "not", "in", "is":
 		// Only match exact operator keywords, not partial matches
 		l.tokens = append(l.tokens, Token{Type: TokenOperator, Value: word, Position: start})
-	} else {
+	case "omit":
+		// Handle the 'omit' keyword
+		l.tokens = append(l.tokens, Token{Type: TokenLiteral, Value: word, Position: start})
+	default:
 		// It's an identifier
 		l.tokens = append(l.tokens, Token{Type: TokenIdentifier, Value: word, Position: start})
 	}
@@ -590,6 +608,8 @@ func (p *ExprParser) parseLiteral(token Token) (*ExprNode, error) {
 		value = false
 	} else if token.Value == "none" {
 		value = nil
+	} else if token.Value == "omit" {
+		value = Omit
 	} else {
 		// Try to parse as number
 		if strings.Contains(token.Value, ".") {
@@ -1314,63 +1334,3 @@ func unescapeStringLiteral(s string) string {
 
 	return b.String()
 }
-
-// evaluateDotNotation handles parsing and evaluation of dot notation expressions like 'user.name'
-// It takes a dot-notation string (e.g., "loop.index") and context, parses the parts,
-// and returns the value of the nested property
-func evaluateDotNotation(dotNotation string, context map[string]interface{}) (interface{}, error) {
-	parts := strings.Split(dotNotation, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid dot notation: %s", dotNotation)
-	}
-
-	// Get the root object from context
-	rootName := parts[0]
-	obj, exists := context[rootName]
-	if !exists {
-		return nil, fmt.Errorf("variable '%s' not found in context", rootName)
-	}
-
-	// Navigate through the object properties
-	for i := 1; i < len(parts); i++ {
-		propName := parts[i]
-
-		// Handle different types of objects
-		switch v := obj.(type) {
-		case map[string]interface{}:
-			// Direct access to map
-			val, ok := v[propName]
-			if !ok {
-				return nil, fmt.Errorf("property '%s' not found in object", propName)
-			}
-			obj = val
-		case map[interface{}]interface{}:
-			// Handle maps with interface{} keys
-			val, ok := v[propName]
-			if !ok {
-				// Try with string conversion
-				val, ok = v[propName]
-				if !ok {
-					return nil, fmt.Errorf("property '%s' not found in object", propName)
-				}
-			}
-			obj = val
-		default:
-			// For other types, try reflection
-			var err error
-			obj, err = getAttributeValue(obj, propName)
-			if err != nil {
-				return nil, fmt.Errorf("error accessing property '%s' in '%s': %v", propName, dotNotation, err)
-			}
-		}
-	}
-
-	return obj, nil
-}
-
-// UndefinedType is a sentinel type for undefined variables in Jinja expressions
-// It is used to distinguish between nil (which is a valid value) and undefined (which is not set in context)
-type UndefinedType struct{}
-
-// Undefined is the singleton value representing an undefined variable
-var Undefined = UndefinedType{}

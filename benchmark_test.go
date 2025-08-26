@@ -42,6 +42,16 @@ func BenchmarkTemplateString(b *testing.B) {
 				"last_login": "2023-06-15", "status": "Active",
 			},
 		},
+		{
+			name:     "template_with_omit",
+			template: "{{ undefined_var | default(omit) }}",
+			context:  map[string]interface{}{},
+		},
+		{
+			name:     "template_with_omit_and_defined",
+			template: "{{ defined_var | default(omit) }}",
+			context:  map[string]interface{}{"defined_var": "Hello"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -73,6 +83,16 @@ func BenchmarkEvaluateExpression(b *testing.B) {
 			name:    "variable_with_default",
 			expr:    "missing | default('Default Value')",
 			context: map[string]interface{}{},
+		},
+		{
+			name:    "variable_with_omit",
+			expr:    "missing | default(omit)",
+			context: map[string]interface{}{},
+		},
+		{
+			name:    "defined_variable_with_omit",
+			expr:    "defined_var | default(omit)",
+			context: map[string]interface{}{"defined_var": "Hello"},
 		},
 	}
 

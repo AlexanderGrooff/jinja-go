@@ -18,9 +18,9 @@ type FilterFunc func(input interface{}, args ...interface{}) (interface{}, error
 var GlobalFilters map[string]FilterFunc
 
 // defaultFilter implements the 'default' Jinja filter.
-// If the input value is considered "falsy" (nil, false, empty string, empty slice/map),
-// it returns the default_value. Otherwise, it returns the input value.
-// Numbers (including 0) are not considered falsy by this filter.
+// If the input value is undefined, it returns the default_value. Otherwise, it returns the input value.
+// The default filter does NOT trigger on falsy values like empty strings, empty slices, or false booleans.
+// It only triggers when the variable is truly undefined.
 func defaultFilter(input interface{}, args ...interface{}) (interface{}, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("default filter requires at least one argument (the default value)")
@@ -30,35 +30,11 @@ func defaultFilter(input interface{}, args ...interface{}) (interface{}, error) 
 	// This is not implemented yet. We are implementing the common one-argument behavior.
 	defaultValue := args[0]
 
-	// The default filter should trigger if the value is undefined.
-	if _, ok := input.(UndefinedType); ok {
+	if input == nil || input == Undefined {
 		return defaultValue, nil
 	}
-
-	if input == nil {
-		return defaultValue, nil
-	}
-
-	val := reflect.ValueOf(input)
-	switch val.Kind() {
-	// Note: reflect.Invalid is not typically expected here if input is not nil,
-	// but can occur if input was, for example, a nil interface that wasn't caught by `input == nil`.
-	case reflect.Invalid:
-		return defaultValue, nil
-	case reflect.Bool:
-		if !val.Bool() {
-			return defaultValue, nil
-		}
-	case reflect.String:
-		if val.Len() == 0 {
-			return defaultValue, nil
-		}
-	case reflect.Slice, reflect.Array, reflect.Map:
-		if val.Len() == 0 {
-			return defaultValue, nil
-		}
-		// Numbers (int, float, etc.) including 0 are not considered falsy by the default filter.
-		// So, if input is 0, it will be returned as is.
+	if _, isOmit := input.(OmitType); isOmit {
+		return Omit, nil
 	}
 
 	return input, nil

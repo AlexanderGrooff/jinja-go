@@ -1,66 +1,74 @@
 [
   {
     "name": "simple_variable",
-    "execution_time_ms": 0.0003989
+    "execution_time_ms": 0.00042219
   },
   {
     "name": "multiple_variables",
-    "execution_time_ms": 0.00111171
+    "execution_time_ms": 0.0011688
   },
   {
     "name": "conditional",
-    "execution_time_ms": 0.0007626699999999999
+    "execution_time_ms": 0.00077656
   },
   {
     "name": "nested_access",
-    "execution_time_ms": 0.00055291
+    "execution_time_ms": 0.00054919
   },
   {
     "name": "filter_usage",
-    "execution_time_ms": 0.0008147499999999999
+    "execution_time_ms": 0.00085599
   },
   {
     "name": "complex_template",
-    "execution_time_ms": 0.00628764
+    "execution_time_ms": 0.00650185
   },
   {
     "name": "deep_nesting",
-    "execution_time_ms": 0.00154098
+    "execution_time_ms": 0.0016175500000000002
   },
   {
     "name": "nested_loops",
-    "execution_time_ms": 0.01422031
+    "execution_time_ms": 0.014436220000000001
   },
   {
     "name": "string_manipulation",
-    "execution_time_ms": 0.00106934
+    "execution_time_ms": 0.00113903
   },
   {
     "name": "complex_conditional",
-    "execution_time_ms": 0.0018350900000000002
+    "execution_time_ms": 0.0018671500000000001
   },
   {
     "name": "items_filter",
-    "execution_time_ms": 0.00895812
+    "execution_time_ms": 0.009393499999999999
   },
   {
     "name": "map_get_method",
-    "execution_time_ms": 0.000633
+    "execution_time_ms": 0.00063715
   },
   {
     "name": "list_literal_iteration",
-    "execution_time_ms": 0.00622729
+    "execution_time_ms": 0.00662597
   },
   {
     "name": "is_defined_test",
-    "execution_time_ms": 0.00096756
+    "execution_time_ms": 0.00096582
   },
   {
     "name": "string_find_method",
-    "execution_time_ms": 0.00082641
+    "execution_time_ms": 0.00084059
   },
   {
     "name": "string_find_with_params",
-    "execution_time_ms": 0.0009864000000000001
+    "execution_time_ms": 0.00100275
+  },
+  {
+    "name": "omit_in_default_filter",
+    "execution_time_ms": 0.00049635
+  },
+  {
+    "name": "omit_in_default_filter_with_defined_var",
+    "execution_time_ms": 0.00058263
   }
 ]
