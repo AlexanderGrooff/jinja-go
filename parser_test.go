@@ -13,6 +13,21 @@ func TestParser_ParseNext(t *testing.T) {
 		wantErr  bool // For ParseNext, errors are not expected from the current implementation unless explicitly set
 	}{
 		{
+			name:     "simple control tag - include with literal path",
+			template: "{% include 'file.txt' %}",
+			want:     []*Node{{Type: NodeControlTag, Content: "include 'file.txt'", Control: &ControlTagInfo{Type: ControlInclude, Expression: "'file.txt'"}}},
+		},
+		{
+			name:     "control tag - include with variable expression",
+			template: "{% include template_path %}",
+			want:     []*Node{{Type: NodeControlTag, Content: "include template_path", Control: &ControlTagInfo{Type: ControlInclude, Expression: "template_path"}}},
+		},
+		{
+			name:     "control tag - include missing argument",
+			template: "{% include %}",
+			want:     []*Node{{Type: NodeControlTag, Content: "include", Control: &ControlTagInfo{Type: ControlUnknown, Expression: "Error parsing tag 'include': include tag requires a template path or expression, e.g., {% include 'file.txt' %}"}}},
+		},
+		{
 			name:     "empty string",
 			template: "",
 			want:     nil,

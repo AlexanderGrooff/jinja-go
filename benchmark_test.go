@@ -43,6 +43,11 @@ func BenchmarkTemplateString(b *testing.B) {
 			},
 		},
 		{
+			name:     "include_simple",
+			template: "{% include 'lookup_bench_test.txt' %}",
+			context:  map[string]interface{}{},
+		},
+		{
 			name:     "template_with_omit",
 			template: "{{ undefined_var | default(omit) }}",
 			context:  map[string]interface{}{},
@@ -57,6 +62,10 @@ func BenchmarkTemplateString(b *testing.B) {
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
 			b.ReportAllocs()
+			if tt.name == "include_simple" {
+				_ = os.WriteFile("lookup_bench_test.txt", []byte("include bench"), 0644)
+				defer os.Remove("lookup_bench_test.txt")
+			}
 			for i := 0; i < b.N; i++ {
 				_, err := TemplateString(tt.template, tt.context)
 				if err != nil {

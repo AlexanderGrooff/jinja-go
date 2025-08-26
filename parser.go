@@ -31,6 +31,7 @@ const (
 	ControlEndFor  ControlTagType = "endfor" // Placeholder for future 'endfor' implementation
 	ControlElse    ControlTagType = "else"   // Placeholder for future 'else' implementation
 	ControlElseIf  ControlTagType = "elif"   // Placeholder for future 'elif' (else if) implementation
+	ControlInclude ControlTagType = "include"
 	ControlUnknown ControlTagType = "unknown"
 )
 
@@ -146,6 +147,13 @@ func parseControlTagDetail(trimmedContent string) (*ControlTagInfo, error) {
 			return nil, fmt.Errorf("if tag requires a condition, e.g., {%% if user.isAdmin %%}")
 		}
 		// The rest of the parts form the expression.
+		info.Expression = strings.Join(parts[1:], " ")
+	case "include":
+		info.Type = ControlInclude
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("include tag requires a template path or expression, e.g., {%% include 'file.txt' %%}")
+		}
+		// The rest forms the path/expression which will be evaluated at render time
 		info.Expression = strings.Join(parts[1:], " ")
 	case "endif":
 		info.Type = ControlEndIf

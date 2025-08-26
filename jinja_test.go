@@ -9,6 +9,11 @@ import (
 )
 
 func TestTemplateString(t *testing.T) {
+	// Prepare include test files used in some test cases
+	_ = os.WriteFile("test_include_1.txt", []byte("INCLUDED-1"), 0644)
+	_ = os.WriteFile("test_include_2.txt", []byte("INCLUDED-2"), 0644)
+	defer os.Remove("test_include_1.txt")
+	defer os.Remove("test_include_2.txt")
 	tests := []struct {
 		name     string
 		template string
@@ -16,6 +21,25 @@ func TestTemplateString(t *testing.T) {
 		want     string
 		wantErr  bool // We don't expect errors from TemplateString based on current implementation
 	}{
+		{
+			name:     "include renders external file",
+			template: "Before {% include 'test_include_1.txt' %} After",
+			context:  map[string]interface{}{"name": "World"},
+			want:     "Before INCLUDED-1 After",
+		},
+		{
+			name:     "include path via variable expression",
+			template: "Start {% include include_path %} End",
+			context:  map[string]interface{}{"include_path": "test_include_2.txt"},
+			want:     "Start INCLUDED-2 End",
+		},
+		{
+			name:     "include missing file errors",
+			template: "{% include 'no_such_file_123456.txt' %}",
+			context:  map[string]interface{}{},
+			want:     "",
+			wantErr:  true,
+		},
 		{
 			name:     "empty template",
 			template: "",

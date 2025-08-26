@@ -2,6 +2,7 @@ package jinja
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"regexp"
 	"sort"
@@ -184,6 +185,29 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 				}
 				result.WriteString(renderedBlock)
 				currentIndex = nextIdx
+			case ControlInclude:
+				includeExpr := strings.TrimSpace(node.Control.Expression)
+				if includeExpr == "" {
+					return "", fmt.Errorf("include tag requires a template path or expression")
+				}
+				val, err := EvaluateExpression(includeExpr, context)
+				if err != nil {
+					return "", fmt.Errorf("error evaluating include expression '%s': %v", includeExpr, err)
+				}
+				path, ok := val.(string)
+				if !ok {
+					return "", fmt.Errorf("include expression must evaluate to a string path, got %T", val)
+				}
+				contentBytes, err := os.ReadFile(path)
+				if err != nil {
+					return "", fmt.Errorf("failed to read included template '%s': %v", path, err)
+				}
+				included, err := TemplateString(string(contentBytes), context)
+				if err != nil {
+					return "", fmt.Errorf("failed to render included template '%s': %v", path, err)
+				}
+				result.WriteString(included)
+				currentIndex++
 			case ControlEndIf:
 				// This should only be reached if findBlock logic is flawed or an endif is orphaned.
 				return "", fmt.Errorf("template error: unexpected '{%% endif %%}' found at node index %d. Content: %s", currentIndex, node.Content)
@@ -337,6 +361,12 @@ func extractVariablesFromNodes(nodes []*Node, variableSet map[string]bool) error
 						if err != nil {
 							return fmt.Errorf("error extracting variables from for expression '%s': %v", node.Control.Expression, err)
 						}
+					}
+				case ControlInclude:
+					// The include expression could be a literal string or an expression like variable
+					if node.Control.Expression != "" {
+						// Try to extract variables from the include expression as well
+						_ = extractVariablesFromExpression(node.Control.Expression, variableSet)
 					}
 				}
 			}
