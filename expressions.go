@@ -941,7 +941,7 @@ func (e *Evaluator) evalBinaryOp(node *ExprNode) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		return !result.(bool), nil
+		return !result, nil
 	case "is":
 		// Generic Jinja test system
 		if testIdent, ok := node.Children[1], node.Children[1].Type == NodeIdentifier; ok {

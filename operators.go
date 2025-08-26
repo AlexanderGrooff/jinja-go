@@ -54,7 +54,7 @@ func negateValue(value interface{}) (interface{}, error) {
 }
 
 // equals checks if two values are equal, with type coercion rules similar to Python
-func equals(left, right interface{}) (interface{}, error) {
+func equals(left, right interface{}) (bool, error) {
 	// Handle nil/None values
 	if left == nil && right == nil {
 		return true, nil
@@ -99,9 +99,9 @@ func equals(left, right interface{}) (interface{}, error) {
 			for i := range l {
 				eq, err := equals(l[i], r[i])
 				if err != nil {
-					return nil, err
+					return false, err
 				}
-				if !eq.(bool) {
+				if !eq {
 					return false, nil
 				}
 			}
@@ -119,9 +119,9 @@ func equals(left, right interface{}) (interface{}, error) {
 				}
 				eq, err := equals(v, rv)
 				if err != nil {
-					return nil, err
+					return false, err
 				}
-				if !eq.(bool) {
+				if !eq {
 					return false, nil
 				}
 			}
@@ -153,6 +153,15 @@ func compare(left, right interface{}, op CompareOp) (interface{}, error) {
 	}
 	if left == nil || right == nil {
 		return op == OpNE, nil
+	}
+
+	// Skip comparing for equality operations
+	switch op {
+	case OpEQ:
+		return equals(left, right)
+	case OpNE:
+		eq, err := equals(left, right)
+		return !eq, err
 	}
 
 	// Try direct type matching first for better performance and precision
@@ -360,7 +369,7 @@ func toInteger(value interface{}) (int, error) {
 }
 
 // checkMembership checks if an item is in a collection
-func checkMembership(collection, item interface{}) (interface{}, error) {
+func checkMembership(collection, item interface{}) (bool, error) {
 	switch c := collection.(type) {
 	case string:
 		// Check if a character/substring is in a string
@@ -376,9 +385,7 @@ func checkMembership(collection, item interface{}) (interface{}, error) {
 			if err != nil {
 				continue
 			}
-			if eq.(bool) {
-				return true, nil
-			}
+			return eq, nil
 		}
 		return false, nil
 
@@ -398,9 +405,7 @@ func checkMembership(collection, item interface{}) (interface{}, error) {
 				if err != nil {
 					continue
 				}
-				if eq.(bool) {
-					return true, nil
-				}
+				return eq, nil
 			}
 			return false, nil
 		} else if kind == reflect.Map {
@@ -409,9 +414,7 @@ func checkMembership(collection, item interface{}) (interface{}, error) {
 				if err != nil {
 					continue
 				}
-				if eq.(bool) {
-					return true, nil
-				}
+				return eq, nil
 			}
 			return false, nil
 		}

@@ -312,6 +312,24 @@ func TestTemplateString(t *testing.T) {
 			context:  map[string]interface{}{}, // The output is now deterministic due to key sorting
 			want:     `{"a": 1, "b": 2}`,
 		},
+		{
+			name:     "template with list equality",
+			template: "{% if list_1 == [1, 2, 3] %}Lists are equal{% else %}Lists are not equal{% endif %}",
+			context: map[string]interface{}{
+				"list_1": []interface{}{1, 2, 3},
+			},
+			want:    "Lists are equal",
+			wantErr: false,
+		},
+		{
+			name:     "template with list inequality",
+			template: "{% if list_1 != [4, 5, 6] %}Lists are different{% else %}Lists are the same{% endif %}",
+			context: map[string]interface{}{
+				"list_1": []interface{}{1, 2, 3},
+			},
+			want:    "Lists are different",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -583,6 +601,55 @@ func TestEvaluateExpression(t *testing.T) {
 			context:    map[string]interface{}{"list_var": []interface{}{1, 2, 3}},
 			want:       []interface{}{1, 2, 3},
 			wantErr:    false,
+		},
+		{
+			name:       "list equality with literal",
+			expression: "list_1 == [1, 2, 3]",
+			context: map[string]interface{}{
+				"list_1": []interface{}{1, 2, 3},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "list inequality with literal",
+			expression: "list_1 != [1, 2, 3]",
+			context: map[string]interface{}{
+				"list_1": []interface{}{4, 5, 6},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "list equality with variable",
+			expression: "list_1 == list_2",
+			context: map[string]interface{}{
+				"list_1": []interface{}{1, 2, 3},
+				"list_2": []interface{}{1, 2, 3},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "empty list equality",
+			expression: "empty_list == []",
+			context: map[string]interface{}{
+				"empty_list": []interface{}{},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:       "nested list equality",
+			expression: "nested_list == [[1, 2], [3, 4]]",
+			context: map[string]interface{}{
+				"nested_list": []interface{}{
+					[]interface{}{1, 2},
+					[]interface{}{3, 4},
+				},
+			},
+			want:    true,
+			wantErr: false,
 		},
 	}
 
