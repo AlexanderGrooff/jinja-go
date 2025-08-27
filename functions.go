@@ -66,6 +66,23 @@ func lookupFunction(e *Evaluator, args ...interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("file lookup requires a string path, got %T", args[1])
 		}
 
+		// Try context-provided search dirs first
+		if dirs, ok := e.context["__search_dirs__"].([]string); ok && len(dirs) > 0 {
+			for _, d := range dirs {
+				if d == "" {
+					continue
+				}
+				candidate := d
+				if candidate[len(candidate)-1] != '/' {
+					candidate += "/"
+				}
+				candidate += filePath
+				if content, err := os.ReadFile(candidate); err == nil {
+					return string(content), nil
+				}
+			}
+		}
+
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -91,12 +108,37 @@ func lookupFunction(e *Evaluator, args ...interface{}) (interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("lookup 'template' second argument must be a string (path to template), got %T", args[1])
 		}
-		templateContent, err := os.ReadFile(templatePath)
-		if err != nil {
-			return nil, fmt.Errorf("lookup 'template': failed to read template file %s: %w", templatePath, err)
+		// Load content using search dirs if present
+		var contentBytes []byte
+		if dirs, ok := e.context["__search_dirs__"].([]string); ok && len(dirs) > 0 {
+			for _, d := range dirs {
+				if d == "" {
+					continue
+				}
+				candidate := d
+				if candidate[len(candidate)-1] != '/' {
+					candidate += "/"
+				}
+				candidate += templatePath
+				if b, err := os.ReadFile(candidate); err == nil {
+					contentBytes = b
+					break
+				}
+			}
+		}
+		var err error
+		if contentBytes == nil {
+			contentBytes, err = os.ReadFile(templatePath)
+			if err != nil {
+				return nil, fmt.Errorf("lookup 'template': failed to read template file %s: %w", templatePath, err)
+			}
 		}
 
-		rendered, err := TemplateString(string(templateContent), e.context)
+		var searchDirs []string
+		if dirs, ok := e.context["__search_dirs__"].([]string); ok {
+			searchDirs = dirs
+		}
+		rendered, err := TemplateStringInContext(string(contentBytes), e.context, searchDirs)
 		if err != nil {
 			return nil, fmt.Errorf("lookup 'template': failed to render template %s: %w", templatePath, err)
 		}

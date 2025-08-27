@@ -45,9 +45,22 @@ func (tc *TemplateCache) Set(template string, nodes []*Node) {
 // Global template cache
 var defaultTemplateCache = NewTemplateCache()
 
+// FileResolver resolves file contents for include/lookup with custom search rules
+type FileResolver func(path string) ([]byte, error)
+
+func defaultFileResolver(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
 // TemplateString renders a template string using the provided context.
 // It processes Jinja-like expressions {{ ... }}, comments {# ... #}, and control tags {% ... %}.
 func TemplateString(template string, context map[string]interface{}) (string, error) {
+	return TemplateStringInContext(template, context, nil)
+}
+
+// TemplateStringInContext renders a template with custom directories used for file resolution.
+// When searchDirs is non-empty, relative paths are resolved by checking each directory in order.
+func TemplateStringInContext(template string, context map[string]interface{}, searchDirs []string) (string, error) {
 	// Check if this template is already cached
 	nodes, found := defaultTemplateCache.Get(template)
 	if !found {
@@ -65,8 +78,34 @@ func TemplateString(template string, context map[string]interface{}) (string, er
 	// Render the template
 	var sb strings.Builder
 
+	// Build resolver
+	var resolver FileResolver = defaultFileResolver
+	if len(searchDirs) > 0 {
+		dirsCopy := append([]string(nil), searchDirs...)
+		resolver = func(path string) ([]byte, error) {
+			// Absolute path
+			if strings.HasPrefix(path, "/") || (len(path) > 1 && path[1] == ':') {
+				return os.ReadFile(path)
+			}
+			for _, d := range dirsCopy {
+				if d == "" {
+					continue
+				}
+				candidate := d
+				if !strings.HasSuffix(candidate, "/") {
+					candidate += "/"
+				}
+				candidate += path
+				if b, err := os.ReadFile(candidate); err == nil {
+					return b, nil
+				}
+			}
+			return os.ReadFile(path)
+		}
+	}
+
 	// Handle control flow (if, for, etc.)
-	err := renderNodes(nodes, context, &sb)
+	err := renderNodesWithResolver(nodes, context, &sb, resolver)
 	if err != nil {
 		return "", fmt.Errorf("template rendering error: %w", err)
 	}
@@ -154,6 +193,11 @@ func processExpression(node *Node, context map[string]any, result *strings.Build
 
 // processNodes recursively processes a slice of nodes, handling control flow like {% if %}.
 func processNodes(nodes []*Node, context map[string]interface{}) (string, error) {
+	return processNodesWithResolver(nodes, context, defaultFileResolver)
+}
+
+// processNodesWithResolver recursively processes nodes using a resolver for include
+func processNodesWithResolver(nodes []*Node, context map[string]interface{}, resolver FileResolver) (string, error) {
 	var result strings.Builder
 	currentIndex := 0
 
@@ -198,15 +242,21 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 				if !ok {
 					return "", fmt.Errorf("include expression must evaluate to a string path, got %T", val)
 				}
-				contentBytes, err := os.ReadFile(path)
+				contentBytes, err := resolver(path)
 				if err != nil {
 					return "", fmt.Errorf("failed to read included template '%s': %v", path, err)
 				}
-				included, err := TemplateString(string(contentBytes), context)
-				if err != nil {
-					return "", fmt.Errorf("failed to render included template '%s': %v", path, err)
+				// Parse and render the included content with the same resolver
+				p := NewParser(string(contentBytes))
+				includedNodes, perr := p.ParseAll()
+				if perr != nil {
+					return "", perr
 				}
-				result.WriteString(included)
+				var buf strings.Builder
+				if err := renderNodesWithResolver(includedNodes, context, &buf, resolver); err != nil {
+					return "", err
+				}
+				result.WriteString(buf.String())
 				currentIndex++
 			case ControlEndIf:
 				// This should only be reached if findBlock logic is flawed or an endif is orphaned.
@@ -235,6 +285,16 @@ func processNodes(nodes []*Node, context map[string]interface{}) (string, error)
 		}
 	}
 	return result.String(), nil
+}
+
+// renderNodesWithResolver processes nodes with a resolver for file-based features
+func renderNodesWithResolver(nodes []*Node, context map[string]interface{}, sb *strings.Builder, resolver FileResolver) error {
+	result, err := processNodesWithResolver(nodes, context, resolver)
+	if err != nil {
+		return err
+	}
+	sb.WriteString(result)
+	return nil
 }
 
 // EvaluateExpression evaluates a single expression string (without surrounding {{ }})
@@ -273,17 +333,6 @@ func (p *Parser) ParseAll() ([]*Node, error) {
 		nodes = append(nodes, node)
 	}
 	return nodes, nil
-}
-
-// renderNodes processes a slice of nodes and writes the result to the given strings.Builder.
-func renderNodes(nodes []*Node, context map[string]interface{}, sb *strings.Builder) error {
-	result, err := processNodes(nodes, context)
-	if err != nil {
-		return err
-	}
-
-	sb.WriteString(result)
-	return nil
 }
 
 // ParseVariables extracts all Jinja variable names from a template string.

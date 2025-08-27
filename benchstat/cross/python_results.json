@@ -1,66 +1,74 @@
 [
   {
     "name": "simple_variable",
-    "execution_time_ms": 0.005575876235961914
+    "execution_time_ms": 0.005625009536743164
   },
   {
     "name": "multiple_variables",
-    "execution_time_ms": 0.006555895805358886
+    "execution_time_ms": 0.006660826206207275
   },
   {
     "name": "conditional",
-    "execution_time_ms": 0.005699892044067383
+    "execution_time_ms": 0.0058170485496521
   },
   {
     "name": "nested_access",
-    "execution_time_ms": 0.006280508041381836
+    "execution_time_ms": 0.006703824996948242
   },
   {
     "name": "filter_usage",
-    "execution_time_ms": 0.006096897125244141
+    "execution_time_ms": 0.006404328346252442
   },
   {
     "name": "complex_template",
-    "execution_time_ms": 0.012218344211578368
+    "execution_time_ms": 0.012441213130950928
   },
   {
     "name": "deep_nesting",
-    "execution_time_ms": 0.00830253839492798
+    "execution_time_ms": 0.008717381954193115
   },
   {
     "name": "nested_loops",
-    "execution_time_ms": 0.020513148307800294
+    "execution_time_ms": 0.02097838878631592
   },
   {
     "name": "string_manipulation",
-    "execution_time_ms": 0.006064329147338867
+    "execution_time_ms": 0.006416192054748535
   },
   {
     "name": "complex_conditional",
-    "execution_time_ms": 0.007665514945983887
+    "execution_time_ms": 0.008083889484405518
   },
   {
     "name": "items_filter",
-    "execution_time_ms": 0.011524600982666016
+    "execution_time_ms": 0.01192399263381958
   },
   {
     "name": "map_get_method",
-    "execution_time_ms": 0.006245822906494141
+    "execution_time_ms": 0.00642657995223999
   },
   {
     "name": "list_literal_iteration",
-    "execution_time_ms": 0.009029786586761474
+    "execution_time_ms": 0.009602887630462647
   },
   {
     "name": "is_defined_test",
-    "execution_time_ms": 0.005736494064331054
+    "execution_time_ms": 0.0058820128440856935
   },
   {
     "name": "string_find_method",
-    "execution_time_ms": 0.006339361667633056
+    "execution_time_ms": 0.006390321254730225
   },
   {
     "name": "string_find_with_params",
-    "execution_time_ms": 0.006089951992034912
+    "execution_time_ms": 0.006421298980712891
+  },
+  {
+    "name": "omit_in_default_filter",
+    "execution_time_ms": 0.006387388706207276
+  },
+  {
+    "name": "omit_in_default_filter_with_defined_var",
+    "execution_time_ms": 0.005946764945983887
   }
 ]

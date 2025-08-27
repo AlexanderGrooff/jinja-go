@@ -1,74 +1,74 @@
 [
   {
     "name": "simple_variable",
-    "execution_time_ms": 0.00042219
+    "execution_time_ms": 0.00040705
   },
   {
     "name": "multiple_variables",
-    "execution_time_ms": 0.0011688
+    "execution_time_ms": 0.00111276
   },
   {
     "name": "conditional",
-    "execution_time_ms": 0.00077656
+    "execution_time_ms": 0.0007659899999999999
   },
   {
     "name": "nested_access",
-    "execution_time_ms": 0.00054919
+    "execution_time_ms": 0.00054215
   },
   {
     "name": "filter_usage",
-    "execution_time_ms": 0.00085599
+    "execution_time_ms": 0.00082303
   },
   {
     "name": "complex_template",
-    "execution_time_ms": 0.00650185
+    "execution_time_ms": 0.00639496
   },
   {
     "name": "deep_nesting",
-    "execution_time_ms": 0.0016175500000000002
+    "execution_time_ms": 0.00156627
   },
   {
     "name": "nested_loops",
-    "execution_time_ms": 0.014436220000000001
+    "execution_time_ms": 0.014551679999999999
   },
   {
     "name": "string_manipulation",
-    "execution_time_ms": 0.00113903
+    "execution_time_ms": 0.00111234
   },
   {
     "name": "complex_conditional",
-    "execution_time_ms": 0.0018671500000000001
+    "execution_time_ms": 0.00182474
   },
   {
     "name": "items_filter",
-    "execution_time_ms": 0.009393499999999999
+    "execution_time_ms": 0.00966841
   },
   {
     "name": "map_get_method",
-    "execution_time_ms": 0.00063715
+    "execution_time_ms": 0.0006591
   },
   {
     "name": "list_literal_iteration",
-    "execution_time_ms": 0.00662597
+    "execution_time_ms": 0.00654311
   },
   {
     "name": "is_defined_test",
-    "execution_time_ms": 0.00096582
+    "execution_time_ms": 0.00095975
   },
   {
     "name": "string_find_method",
-    "execution_time_ms": 0.00084059
+    "execution_time_ms": 0.0008539600000000001
   },
   {
     "name": "string_find_with_params",
-    "execution_time_ms": 0.00100275
+    "execution_time_ms": 0.00103776
   },
   {
     "name": "omit_in_default_filter",
-    "execution_time_ms": 0.00049635
+    "execution_time_ms": 0.00051244
   },
   {
     "name": "omit_in_default_filter_with_defined_var",
-    "execution_time_ms": 0.00058263
+    "execution_time_ms": 0.0005867400000000001
   }
 ]
