@@ -3046,3 +3046,44 @@ func TestLexerOmitInDefaultFilter(t *testing.T) {
 		t.Error("Expected 'omit' to be tokenized as a literal")
 	}
 }
+
+func TestParseVariables_WithIncludeLiteral(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "parsevars-include-*.j2")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	included := "Hello {{ in_name }}! {% if flag %}X{{ other }}Y{% endif %}"
+	if err := os.WriteFile(tmpFile.Name(), []byte(included), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("failed to close temp file: %v", err)
+	}
+
+	template := "Before {% include '" + tmpFile.Name() + "' %} After"
+	vars, err := ParseVariables(template)
+	if err != nil {
+		t.Fatalf("ParseVariables returned error: %v", err)
+	}
+
+	// Expect variables from the included file
+	expected := []string{"flag", "in_name", "other"}
+	sort.Strings(vars)
+	sort.Strings(expected)
+	if !reflect.DeepEqual(vars, expected) {
+		t.Errorf("ParseVariables() = %v, want %v", vars, expected)
+	}
+}
+
+func TestParseVariables_IncludeMissingFileIsSkipped(t *testing.T) {
+	template := "Text {% include 'file_that_does_not_exist_abcdef.j2' %} more text"
+	vars, err := ParseVariables(template)
+	if err != nil {
+		t.Fatalf("ParseVariables returned error for missing include: %v", err)
+	}
+	if len(vars) != 0 {
+		t.Errorf("expected no variables, got %v", vars)
+	}
+}

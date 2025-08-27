@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -350,7 +351,8 @@ func ParseVariables(template string) ([]string, error) {
 	variableSet := make(map[string]bool)
 
 	// Extract variables from all nodes
-	err = extractVariablesFromNodes(nodes, variableSet)
+	visited := make(map[string]bool)
+	err = extractVariablesFromNodes(nodes, variableSet, visited)
 	if err != nil {
 		return nil, fmt.Errorf("variable extraction error: %w", err)
 	}
@@ -381,7 +383,7 @@ func ParseVariablesFromExpression(expression string) ([]string, error) {
 }
 
 // extractVariablesFromNodes recursively extracts variable names from a slice of nodes
-func extractVariablesFromNodes(nodes []*Node, variableSet map[string]bool) error {
+func extractVariablesFromNodes(nodes []*Node, variableSet map[string]bool, visitedIncludes map[string]bool) error {
 	for _, node := range nodes {
 		switch node.Type {
 		case NodeExpression:
@@ -416,6 +418,28 @@ func extractVariablesFromNodes(nodes []*Node, variableSet map[string]bool) error
 					if node.Control.Expression != "" {
 						// Try to extract variables from the include expression as well
 						_ = extractVariablesFromExpression(node.Control.Expression, variableSet)
+
+						// If the include uses a literal path, read and parse that file and extract variables recursively.
+						// If the file cannot be found or parsed, skip it silently.
+						expr := strings.TrimSpace(node.Control.Expression)
+						if len(expr) >= 2 {
+							path, uqErr := strconv.Unquote(expr)
+							if uqErr != nil {
+								// Fallback naive strip when clearly quoted
+								if (expr[0] == '\'' && expr[len(expr)-1] == '\'') || (expr[0] == '"' && expr[len(expr)-1] == '"') {
+									path = expr[1 : len(expr)-1]
+								}
+							}
+							if path != "" && !visitedIncludes[path] {
+								visitedIncludes[path] = true
+								if b, rerr := os.ReadFile(path); rerr == nil {
+									p := NewParser(string(b))
+									if incNodes, perr := p.ParseAll(); perr == nil {
+										_ = extractVariablesFromNodes(incNodes, variableSet, visitedIncludes)
+									}
+								}
+							}
+						}
 					}
 				}
 			}

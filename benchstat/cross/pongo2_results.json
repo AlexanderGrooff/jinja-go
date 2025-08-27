@@ -1,46 +1,46 @@
 [
   {
     "name": "simple_variable",
-    "execution_time_ms": 0.00061101
+    "execution_time_ms": 0.00062236
   },
   {
     "name": "multiple_variables",
-    "execution_time_ms": 0.00114828
+    "execution_time_ms": 0.00112684
   },
   {
     "name": "conditional",
-    "execution_time_ms": 0.00085477
+    "execution_time_ms": 0.00083548
   },
   {
     "name": "nested_access",
-    "execution_time_ms": 0.00075931
+    "execution_time_ms": 0.0007652099999999999
   },
   {
     "name": "complex_template",
-    "execution_time_ms": 0.0028080699999999998
+    "execution_time_ms": 0.00290901
   },
   {
     "name": "deep_nesting",
-    "execution_time_ms": 0.00119582
+    "execution_time_ms": 0.00120161
   },
   {
     "name": "nested_loops",
-    "execution_time_ms": 0.0055284
+    "execution_time_ms": 0.0053696
   },
   {
     "name": "complex_conditional",
-    "execution_time_ms": 0.00136256
+    "execution_time_ms": 0.0013671
   },
   {
     "name": "map_get_method",
-    "execution_time_ms": 0.00052556
+    "execution_time_ms": 0.00055311
   },
   {
     "name": "string_find_method",
-    "execution_time_ms": 1.5e-7
+    "execution_time_ms": 2.7999999999999997e-7
   },
   {
     "name": "string_find_with_params",
-    "execution_time_ms": 1.3999999999999998e-7
+    "execution_time_ms": 1.7000000000000001e-7
   }
 ]
